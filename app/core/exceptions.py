@@ -8,6 +8,26 @@ class AppException(Exception):
 
     pass
 
+class ServerError(AppException):
+    '''Internal Server Error'''
+
+    pass
+
+class AuthenticationError(AppException):
+    '''User Not Authenticated'''
+
+    pass
+
+class AuthorizationError(AppException):
+    '''User Not Authorized'''
+
+    pass
+
+class UserNotFoundError(AppException):
+    '''User not found'''
+
+    pass
+
 
 def create_exception_handler(
     initial_detail: dict, status_code: int

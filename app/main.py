@@ -8,4 +8,4 @@ app = FastAPI(
     version=settings.API_VERSION,
 )
 
-
+from app.core import exception_handlers
