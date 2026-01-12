@@ -319,7 +319,6 @@ class AuthServiceV1:
             auth_repo_v1.delete_tokens(db)
             db.commit()
         except Exception as e:
-            print(e)
             db.rollback()
             raise ServerError() from e
 

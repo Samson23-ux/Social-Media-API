@@ -15,14 +15,24 @@ from app.api.v1.schemas.auth import TokenV1, BaseResponseV1
 auth_router_v1 = APIRouter()
 
 
-@auth_router_v1.post('/auth/sign-up/', status_code=201, response_model=UserResponseV1)
+@auth_router_v1.post(
+    '/auth/sign-up/',
+    status_code=201,
+    response_model=UserResponseV1,
+    description='Create user account',
+)
 async def sign_up(user_create: UserCreateV1, db: Session = Depends(get_db)):
     user = auth_service_v1.sign_up(user_create, db)
     print(user.email)
     return UserResponseV1(message='User created successfully', data=user)
 
 
-@auth_router_v1.post('/auth/sign-in/', status_code=201, response_model=TokenV1)
+@auth_router_v1.post(
+    '/auth/sign-in/',
+    status_code=201,
+    response_model=TokenV1,
+    description='User login with credentials validation',
+)
 async def sign_in(
     response: Response,
     login_form: OAuth2PasswordRequestForm = Depends(),
@@ -67,7 +77,12 @@ async def get_access_token(
     return access_token
 
 
-@auth_router_v1.patch('/auth/sign-out/', status_code=200, response_model=BaseResponseV1)
+@auth_router_v1.patch(
+    '/auth/sign-out/',
+    status_code=200,
+    response_model=BaseResponseV1,
+    description='Sign out user',
+)
 async def sign_out(
     request: Request,
     _=Depends(get_current_user),
@@ -79,7 +94,10 @@ async def sign_out(
 
 
 @auth_router_v1.patch(
-    '/auth/update-password/', status_code=200, response_model=UserResponseV1
+    '/auth/update-password/',
+    status_code=200,
+    response_model=UserResponseV1,
+    description='Update password with validation of current password',
 )
 async def update_password(
     request: Request,
@@ -96,7 +114,10 @@ async def update_password(
 
 
 @auth_router_v1.patch(
-    '/auth/reset-password/', status_code=200, response_model=UserResponseV1
+    '/auth/reset-password/',
+    status_code=200,
+    response_model=UserResponseV1,
+    description='Reset password if forgotten or lost',
 )
 async def reset_password(
     email: str = Form(...),
@@ -108,7 +129,10 @@ async def reset_password(
 
 
 @auth_router_v1.patch(
-    '/auth/restore-account/', status_code=200, response_model=UserResponseV1
+    '/auth/restore-account/',
+    status_code=200,
+    response_model=UserResponseV1,
+    description='Restore account after temporary deletion before 30 days',
 )
 async def restore_account(
     email: str = Form(...),

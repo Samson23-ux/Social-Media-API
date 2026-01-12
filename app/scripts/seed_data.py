@@ -6,6 +6,8 @@ from app.api.v1.services.auth_service import auth_service_v1
 from app.api.v1.schemas.users import UserCreateV1, RoleCreateV1
 
 
+
+# seed dB with roles
 def create_roles():
     admin_role = RoleCreateV1(name='admin')
     user_role = RoleCreateV1(name='user')
@@ -15,7 +17,7 @@ def create_roles():
     user_service_v1.create_role(admin_role, db)
     user_service_v1.create_role(user_role, db)
 
-
+# create a first and core admin user
 def create_admin_user():
     user_create = UserCreateV1(
         display_name=settings.ADMIN_DISPLAY_NAME,

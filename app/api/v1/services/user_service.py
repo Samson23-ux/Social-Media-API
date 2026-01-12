@@ -6,9 +6,13 @@ from sqlalchemy.orm import Session
 from app.utils import write_file
 from app.core.config import settings
 from app.models.users import User, Role
+from app.models.auth import RefreshToken
+from app.api.v1.schemas.auth import TokenStatus
+from app.core.security import decode_token
 from app.models.images import Image, ProfileImage
 from app.api.v1.schemas.users import RoleCreateV1
 from app.api.v1.repositories.user_repo import user_repo_v1
+from app.api.v1.repositories.auth_repo import auth_repo_v1
 from app.api.v1.schemas.images import ImageInDBV1, ImageReadV1
 
 from app.core.exceptions import (
@@ -16,7 +20,8 @@ from app.core.exceptions import (
     RoleExistsError,
     ProfileImageExistsError,
     ProfileImageError,
-    ServerError
+    ServerError,
+    AuthenticationError
 )
 
 
@@ -73,7 +78,13 @@ class UserServiceV1:
         return role_out
 
     @staticmethod
-    async def upload_image(user: User, image_uploads: list[UploadFile], db: Session):
+    async def upload_image(refresh_token: RefreshToken, user: User, image_uploads: list[UploadFile], db: Session):
+        token = decode_token(refresh_token, settings.REFRESH_TOKEN_SECRET_KEY)
+        refresh_token_db = auth_repo_v1.get_refresh_token(token.get('jti'), db)
+
+        if refresh_token_db.status == TokenStatus.REVOKED:
+            raise AuthenticationError()
+
         #restricts a user from uploading 0 or more than 2 images
         if len(image_uploads) < 1 or len(image_uploads) > 2:
             raise ProfileImageError()

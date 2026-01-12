@@ -1,4 +1,5 @@
 from sqlalchemy.orm import Session
+from fastapi.requests import Request
 from fastapi import APIRouter, UploadFile, Depends, File
 
 from app.models.users import User
@@ -17,9 +18,11 @@ users_router_v1 = APIRouter()
     description='Upload user avatar and header images',
 )
 async def upload_image(
+    request: Request,
     images: list[UploadFile] = File(...),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    profile_images = await user_service_v1.upload_image(user, images, db)
+    refresh_token = request.cookies.get('refresh_token')
+    profile_images = await user_service_v1.upload_image(refresh_token, user, images, db)
     return ImageResponseV1(message='Images uploaded successfully', data=profile_images)
