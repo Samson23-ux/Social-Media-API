@@ -12,10 +12,11 @@ from sqlalchemy import (
     Table,
     UUID,
     Enum,
-    Date
+    Date,
 )
 
 from app.database.base import Base
+
 
 class UserRole(str, enum.Enum):
     USER: str = 'user'
@@ -46,10 +47,10 @@ class User(Base):
     id = Column(UUID, default=text('uuid_generate_v4()'), primary_key=True)
     display_name = Column(VARCHAR(50), nullable=False)
     username = Column(VARCHAR(50), nullable=False, unique=True)
-    email = Column(VARCHAR(50), unique=True, nullable=False)
+    email = Column(VARCHAR(50), unique=True, nullable=False, index=True)
     dob = Column(Date, nullable=False)
     nationality = Column(VARCHAR(50), nullable=False)
-    hash_password = Column(VARCHAR(50), nullable=False)
+    hash_password = Column(Text, nullable=False)
     role_id = Column(UUID, ForeignKey('roles.id', ondelete='RESTRICT'), nullable=False)
     bio = Column(Text)
     is_delete = Column(Boolean, default=False, nullable=False)
@@ -61,10 +62,10 @@ class User(Base):
 
     @property
     def age(self):
-        #returns the user age
+        # returns the user age
         today: date = date.today()
         return (
-            - today.year
+            -today.year
             - self.dob.year
             - ((today.month, today.day) < (self.dob.month, self.dob.day))
         )
@@ -86,23 +87,9 @@ class User(Base):
         single_parent=True,
     )
 
-    comments = relationship(
-        'Comment',
-        secondary='comments',
-        back_populates='user',
-        passive_deletes=True,
-        cascade='all, delete-orphan',
-        single_parent=True,
-    )
+    comments = relationship('Comment', back_populates='user', viewonly=True)
 
-    likes = relationship(
-        'Like',
-        secondary='likes',
-        back_populates='user',
-        passive_deletes=True,
-        cascade='all, delete-orphan',
-        single_parent=True,
-    )
+    likes = relationship('Like', back_populates='user', viewonly=True)
 
     role = relationship('Role', back_populates='users')
 
@@ -110,36 +97,12 @@ class User(Base):
         'RefreshToken', back_populates='user', passive_deletes=True
     )
 
-    profile_images = relationship(
-        'ProfileImage',
-        back_populates='user',
-        cascade='all, delete-orphan',
-        single_parent=True,
-        passive_deletes=True,
-    )
+    # This allows the profile_images table to be updated with
+    # the user_id and image_id upon insertion of image into
+    # user.images collection
+    images = relationship('Image', secondary='profile_images', back_populates='users')
 
-    post_images = relationship(
-        'PostImage',
-        secondary='user',
-        passive_deletes=True,
-        cascade='all, delete-orphan',
-        single_parent=True,
-    )
-
-
-class ProfileImage(Base):
-    # holds both avatar and header image urls
-    # a user should only appear twice with logic enforced in app layer
-    __tablename__ = 'profile_images'
-
-    id = Column(UUID, default=text('uuid_generate_v4()'), primary_key=True)
-    user_id = Column(UUID, ForeignKey('users.id', ondelete='CASCADE'))
-    image_url = Column(Text, nullable=False)
-    created_at = Column(
-        DateTime(timezone=True), default=datetime.now(timezone.utc), nullable=False
-    )
-
-    user = relationship('User', back_populates='profile_images')
+    profile_images = relationship('ProfileImage', back_populates='user', viewonly=True)
 
 
 class Role(Base):

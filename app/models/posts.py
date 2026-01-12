@@ -1,6 +1,6 @@
 import enum
-from datetime import datetime, timezone
 from sqlalchemy.orm import relationship
+from datetime import datetime, timezone
 from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy import (
     Column,
@@ -41,19 +41,10 @@ class Post(Base):
         DateTime(timezone=True), default=datetime.now(timezone.utc), nullable=False
     )
 
-    user = relationship('User', back_populates='posts')
-
-    images = relationship(
-        'PostImage',
-        secondary='post',
-        passive_deletes=True,
-        cascade='all, delete-orphan',
-        single_parent=True,
-    )
+    user = relationship('User', back_populates='posts', viewonly=True)
 
     comments = relationship(
         'Comment',
-        secondary='comments',
         back_populates='post',
         passive_deletes=True,
         cascade='all, delete-orphan',
@@ -62,30 +53,19 @@ class Post(Base):
 
     likes = relationship(
         'Like',
-        secondary='likes',
         back_populates='post',
         passive_deletes=True,
         cascade='all, delete-orphan',
         single_parent=True,
     )
 
+    images = relationship('Image', secondary='post_images', back_populates='posts')
+
+    post_images = relationship('PostImage', back_populates='post', viewonly=True)
+
     __table_args__ = (
         Index('idx_content_search', content_search, postgresql_using='gin'),
     )
-
-
-class PostImage(Base):
-    __tablename__ = 'post_images'
-
-    post_id = Column(UUID, ForeignKey('posts.id', ondelete='CASCADE'), primary_key=True)
-    user_id = Column(UUID, ForeignKey('users.id', ondelete='CASCADE'), primary_key=True)
-    image_url = Column(Text, nullable=False)
-    created_at = Column(
-        DateTime(timezone=True), default=datetime.now(timezone.utc), nullable=False
-    )
-
-    post = relationship('Post', back_populates='post_images')
-    user = relationship('User', back_populates='post_images')
 
 
 class Like(Base):
@@ -104,8 +84,9 @@ class Like(Base):
 class Comment(Base):
     __tablename__ = 'comments'
 
-    post_id = Column(UUID, ForeignKey('posts.id', ondelete='CASCADE'), primary_key=True)
-    user_id = Column(UUID, ForeignKey('users.id', ondelete='CASCADE'), primary_key=True)
+    id = Column(UUID, default=text('uuid_generate_v4()'), primary_key=True)
+    post_id = Column(UUID, ForeignKey('posts.id', ondelete='CASCADE'), nullable=False)
+    user_id = Column(UUID, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
     content = Column(Text, nullable=False)
     created_at = Column(
         DateTime(timezone=True), default=datetime.now(timezone.utc), nullable=False

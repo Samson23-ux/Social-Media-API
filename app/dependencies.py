@@ -4,14 +4,14 @@ from fastapi.security import OAuth2PasswordBearer
 
 
 from app.models.users import User
-from app.utils import decode_token
 from app.core.config import settings
+from app.core.security import decode_token
 from app.database.session import SessionLocal
 from app.api.v1.services.user_service import user_service_v1
 
 from app.core.exceptions import AuthenticationError, AuthorizationError
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl='api/v1/login')
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl='/api/v1/auth/sign-in/')
 
 
 def get_db():
@@ -30,7 +30,7 @@ async def get_current_user(
     if not payload:
         raise AuthenticationError()
 
-    user = await user_service_v1.get_user_by_id(payload.get('sub'), db)
+    user = user_service_v1.get_user_by_id(payload.get('sub'), db)
     return user
 
 

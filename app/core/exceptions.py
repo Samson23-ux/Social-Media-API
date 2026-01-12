@@ -28,6 +28,43 @@ class UserNotFoundError(AppException):
 
     pass
 
+class UserExistsError(AppException):
+    '''User already exists'''
+
+    pass
+
+class RoleExistsError(AppException):
+    '''Role already exists'''
+
+    pass
+
+class ProfileImageError(AppException):
+    '''Min and Max file not met'''
+
+    pass
+
+class ProfileImageExistsError(AppException):
+    '''Profile images are complete'''
+
+    pass
+
+class CredentialError(AppException):
+    '''User provided invalid credentials'''
+
+    pass
+
+class PasswordError(AppException):
+    '''User provided incorrect password'''
+
+    pass
+
+class UsernameError(AppException):
+    '''Invalid username'''
+
+    pass
+
+
+
 
 def create_exception_handler(
     initial_detail: dict, status_code: int

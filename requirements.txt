@@ -1,3 +1,4 @@
+aiofiles==25.1.0
 alembic==1.17.2
 amqp==5.3.1
 annotated-doc==0.0.4
@@ -21,6 +22,7 @@ fastapi==0.128.0
 fastapi-cli==0.0.20
 fastapi-cloud-cli==0.8.0
 fastar==0.8.0
+gevent==25.9.1
 greenlet==3.3.0
 h11==0.16.0
 httpcore==1.0.9
@@ -74,3 +76,5 @@ vine==5.1.0
 watchfiles==1.1.1
 wcwidth==0.2.14
 websockets==15.0.1
+zope.event==6.1
+zope.interface==8.2
