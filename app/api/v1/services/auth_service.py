@@ -304,7 +304,7 @@ class AuthServiceV1:
 
         user.is_delete = True
         user.deleted_at = datetime.now(timezone.utc)
-        user.delete_at = datetime.now(timezone.utc) + timedelta(days=30)
+        user.delete_at = datetime.now(timezone.utc) + timedelta(minutes=1)
 
         try:
             user_service_v1.add_user(user, db)

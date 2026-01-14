@@ -16,6 +16,7 @@ class Settings(BaseSettings):
 
     # DB URL
     DATABASE_URL: str
+    WORKER_DATABASE_URL: str
 
     #Broker URI
     BROKER_URL: str

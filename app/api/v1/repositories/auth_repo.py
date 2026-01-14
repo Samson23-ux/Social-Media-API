@@ -30,7 +30,7 @@ class AuthRepoV1:
                     RefreshToken.status == TokenStatus.USED,
                 )
             )
-            .execution_options(synchronize_session='fetch')
+            .execution_options(synchronize_session=False)
         )
         db.execute(stmt)
 
