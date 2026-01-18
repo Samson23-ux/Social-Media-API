@@ -1,4 +1,5 @@
 from uuid import UUID
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from sqlalchemy import select, delete, or_
 
@@ -26,6 +27,7 @@ class AuthRepoV1:
             delete(RefreshToken)
             .where(
                 or_(
+                    datetime.now(timezone.utc) >= RefreshToken.expires_at,
                     RefreshToken.status == TokenStatus.REVOKED,
                     RefreshToken.status == TokenStatus.USED,
                 )

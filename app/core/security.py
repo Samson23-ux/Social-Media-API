@@ -1,3 +1,5 @@
+import hashlib
+import sentry_sdk
 from uuid import uuid4
 from jose import jwt, JWTError
 from pwdlib import PasswordHash
@@ -5,15 +7,20 @@ from pwdlib.hashers.argon2 import Argon2Hasher
 from datetime import datetime, timedelta, timezone
 
 from app.core.config import settings
-from app.api.v1.schemas.auth import TokenDataV1
+from app.models.auth import RefreshToken
+from app.api.v1.schemas.auth import TokenDataV1, TokenStatus
 
 # Argon2id for hashing password with default parameters
 pwhs = PasswordHash(hashers=[Argon2Hasher()])
 
-
 def hash_password(password: str) -> str:
     password_pepper: str = password + settings.ARGON2_PEPPER
     return pwhs.hash(password_pepper)
+
+
+def hash_token(token: str) -> str:
+    token_byte = token.encode('utf-8')
+    return hashlib.sha256(token_byte).hexdigest()
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -78,5 +85,12 @@ def decode_token(token: str, key: str):
             algorithms=[settings.JWT_ALGORITHM],
         )
         return payload
-    except JWTError:
+    except JWTError as e:
+        sentry_sdk.capture_exception(e)
         return None
+
+
+def is_refresh_token_valid(token: RefreshToken):
+    if token.status == TokenStatus.REVOKED or token.status == TokenStatus.USED:
+        return False
+    return True

@@ -44,5 +44,8 @@ class Settings(BaseSettings):
     PROFILE_IMAGE_PATH: str
     POST_IMAGE_PATH: str
 
+    # Sentry dsn
+    SENTRY_SDK_DSN: str
+
 
 settings = Settings()

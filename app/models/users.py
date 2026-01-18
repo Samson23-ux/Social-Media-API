@@ -65,7 +65,7 @@ class User(Base):
         # returns the user age
         today: date = date.today()
         return (
-            -today.year
+            today.year
             - self.dob.year
             - ((today.month, today.day) < (self.dob.month, self.dob.day))
         )

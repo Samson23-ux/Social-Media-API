@@ -15,7 +15,7 @@ db_engine: Engine = create_engine(
     }
 )
 
-SessionLocal = sessionmaker(autoflush=False, autocommit=False, bind=db_engine)
+SessionLocal: Session = sessionmaker(autoflush=False, autocommit=False, bind=db_engine)
 
 # background task to delete revoked or used refresh tokens
 @app.task

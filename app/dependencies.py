@@ -1,5 +1,6 @@
 from fastapi import Depends
 from sqlalchemy.orm import Session
+from sentry_sdk import logger as sentry_logger
 from fastapi.security import OAuth2PasswordBearer
 
 
@@ -28,6 +29,7 @@ async def get_current_user(
     payload: dict = decode_token(token, settings.ACCESS_TOKEN_SECRET_KEY)
 
     if not payload:
+        sentry_logger.error('Error authenticating user')
         raise AuthenticationError()
 
     user = user_service_v1.get_user_by_id(payload.get('sub'), db)
@@ -37,6 +39,7 @@ async def get_current_user(
 def required_roles(roles: list[str]):
     def role_checker(user: User = Depends(get_current_user)):
         if user.role not in roles:
+            sentry_logger.error('User not permitted')
             raise AuthorizationError()
         return user
 

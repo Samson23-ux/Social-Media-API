@@ -7,9 +7,9 @@ from fastapi.security import OAuth2PasswordRequestForm
 from app.models.users import User
 from app.core.config import settings
 from app.dependencies import get_db, get_current_user
+from app.api.v1.schemas.auth import TokenV1, BaseResponseV1
 from app.api.v1.services.auth_service import auth_service_v1
 from app.api.v1.schemas.users import UserCreateV1, UserResponseV1
-from app.api.v1.schemas.auth import TokenV1, BaseResponseV1
 
 
 auth_router_v1 = APIRouter()
@@ -23,7 +23,6 @@ auth_router_v1 = APIRouter()
 )
 async def sign_up(user_create: UserCreateV1, db: Session = Depends(get_db)):
     user = auth_service_v1.sign_up(user_create, db)
-    print(user.email)
     return UserResponseV1(message='User created successfully', data=user)
 
 
@@ -60,7 +59,6 @@ async def sign_in(
 async def get_access_token(
     response: Response,
     request: Request,
-    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     refresh_token = request.cookies.get('refresh_token')
