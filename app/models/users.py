@@ -13,6 +13,7 @@ from sqlalchemy import (
     UUID,
     Enum,
     Date,
+    Index,
 )
 
 from app.database.base import Base
@@ -103,6 +104,21 @@ class User(Base):
     images = relationship('Image', secondary='profile_images', back_populates='users')
 
     profile_images = relationship('ProfileImage', back_populates='user', viewonly=True)
+
+    __table_args__ = (
+        Index(
+            'idx_display_name',
+            display_name,
+            postgresql_using='gin',
+            postgresql_ops={'display_name': 'gin_trgm_ops'},
+        ),
+        Index(
+            'idx_username',
+            username,
+            postgresql_using='gin',
+            postgresql_ops={'username': 'gin_trgm_ops'},
+        ),
+    )
 
 
 class Role(Base):

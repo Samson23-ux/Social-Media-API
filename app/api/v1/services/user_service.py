@@ -11,23 +11,40 @@ from app.core.config import settings
 from app.models.users import User, Role
 from app.models.auth import RefreshToken
 from app.models.images import Image, ProfileImage
-from app.api.v1.schemas.users import RoleCreateV1
 from app.api.v1.repositories.user_repo import user_repo_v1
-from app.api.v1.repositories.auth_repo import auth_repo_v1
 from app.api.v1.schemas.images import ImageInDBV1, ImageReadV1
-from app.core.security import decode_token, is_refresh_token_valid
+from app.core.security import validate_refresh_token
+from app.api.v1.schemas.users import (
+    RoleCreateV1,
+    UserUpdateV1,
+    UserProfileV1,
+    UserReadV1,
+)
 
 from app.core.exceptions import (
     ServerError,
     RoleExistsError,
-    ProfileImageError,
+    UserExistsError,
     UserNotFoundError,
-    AuthenticationError,
+    ProfileImageError,
     ProfileImageExistsError,
 )
 
 
 class UserServiceV1:
+    @staticmethod
+    def get_users(
+        db: Session,
+        refresh_token: RefreshToken,
+        nationality: str | None = None,
+        year: int | None = None,
+        sort: str | None = None,
+        order: str | None = None,
+        offset: int = 0,
+        limit: int = 10,
+    ):
+        _ = validate_refresh_token(refresh_token, db)
+
     @staticmethod
     def get_user_by_id(user_id: UUID, db: Session) -> User:
         user = user_repo_v1.get_user_by_id(user_id, db)
@@ -53,6 +70,17 @@ class UserServiceV1:
             )
             raise UserNotFoundError()
         return user
+
+    @staticmethod
+    def get_user_profile(
+        user: User, refresh_token: RefreshToken, db: Session
+    ) -> UserProfileV1:
+        _ = validate_refresh_token(refresh_token, db)
+
+        user_read = UserReadV1.model_validate(user)
+        user_profile = UserProfileV1(**user_read.model_dump(), age=user.age)
+
+        return user_profile
 
     @staticmethod
     def get_role(role_name: Role, db: Session) -> Role:
@@ -92,24 +120,54 @@ class UserServiceV1:
         return role_out
 
     @staticmethod
+    def update_user(
+        user_update: UserUpdateV1, user: User, refresh_token: str, db: Session
+    ) -> User:
+        _ = validate_refresh_token(refresh_token, db)
+
+        if user_update.email and user_repo_v1.get_user_by_email(user_update.email, db):
+            sentry_logger.error(
+                'User with email {email} exists', email=user_update.email
+            )
+            raise UserExistsError()
+
+        if user_update.username and user_repo_v1.get_user_by_username(
+            user_update.username, db
+        ):
+            sentry_logger.error(
+                'User with username {username} exists',
+                email=user_update.username,
+            )
+            raise UserExistsError()
+
+        user_update_dict: dict = user_update.model_dump(exclude_unset=True)
+
+        for k, v in user_update_dict.items():
+            setattr(user, k, v)
+
+        try:
+            user_repo_v1.add_user(user, db)
+            sentry_logger.info('User {id} profile updated', id=user.id)
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            sentry_sdk.capture_exception(e)
+            sentry_logger.error(
+                'Internal server error occured while updating user {id} profile',
+                id=user.id,
+            )
+            raise ServerError() from e
+
+        return user_repo_v1.get_user_by_id(user.id, db)
+
+    @staticmethod
     async def upload_image(
         refresh_token: RefreshToken,
         user: User,
         image_uploads: list[UploadFile],
         db: Session,
-    ):
-        token = decode_token(refresh_token, settings.REFRESH_TOKEN_SECRET_KEY)
-
-        # raise authentication error if refresh token has expired
-        if not token:
-            sentry_logger.error('Error authenticating user. Refresh token not valid')
-            raise AuthenticationError()
-
-        refresh_token_db = auth_repo_v1.get_refresh_token(token.get('jti'), db)
-
-        if not is_refresh_token_valid(refresh_token_db):
-            sentry_logger.error('Error authenticating user')
-            raise AuthenticationError()
+    ) -> ImageReadV1:
+        _ = validate_refresh_token(refresh_token, db)
 
         # restricts a user from uploading 0 or more than 2 images
         if len(image_uploads) < 1 or len(image_uploads) > 2:
@@ -118,7 +176,7 @@ class UserServiceV1:
             )
             raise ProfileImageError()
 
-        user_images = user_repo_v1.get_user_images(user)
+        user_images: list[ProfileImage] = user_repo_v1.get_user_images(user)
 
         # checks if the user already uploaded both avatar and header images
         if len(user_images) >= 2:
@@ -126,13 +184,15 @@ class UserServiceV1:
             raise ProfileImageExistsError()
 
         for img in image_uploads:
-            image_id = user_repo_v1.get_image_id(img.filename, db)
+            image_id: UUID = user_repo_v1.get_image_id(img.filename, db)
 
             # this ensures a duplicate image is not created
             # and the profile image is created directly instead
             # allowing just one type of image on disk and database(images table)
             if image_id:
-                profile_img = ProfileImage(user_id=user.id, image_id=image_id)
+                profile_img: ProfileImage = ProfileImage(
+                    user_id=user.id, image_id=image_id
+                )
                 try:
                     user_repo_v1.create_profile_image(profile_img, db)
                     db.commit()
@@ -146,14 +206,14 @@ class UserServiceV1:
                     )
                     raise ServerError() from e
             else:
-                path = Path(settings.PROFILE_IMAGE_PATH).resolve()
-                file_path = f'{str(path)}\\{img.filename}'
+                path: Path = Path(settings.PROFILE_IMAGE_PATH).resolve()
+                file_path: str = f'{str(path)}\\{img.filename}'
 
                 await write_file(file_path, img)
-                image_name = img.filename
-                image_type = img.content_type
-                image_size = img.size
-                image = Image(
+                image_name: str = img.filename
+                image_type: str = img.content_type
+                image_size: int = img.size
+                image: Image = Image(
                     **ImageInDBV1(
                         image_url=image_name,
                         image_type=image_type,
@@ -173,13 +233,13 @@ class UserServiceV1:
                     )
                     raise ServerError() from e
 
-        profile_images = user_repo_v1.get_user_images(user)
+        profile_images: list[ProfileImage] = user_repo_v1.get_user_images(user)
 
         image_urls = []
         for i in profile_images:
             image_urls.append(i.image.image_url)
 
-        images = ImageReadV1(image_url=image_urls)
+        images: ImageReadV1 = ImageReadV1(image_url=image_urls)
         return images
 
     @staticmethod

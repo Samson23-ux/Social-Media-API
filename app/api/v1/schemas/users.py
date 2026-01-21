@@ -1,11 +1,13 @@
 import re
 import enum
+from uuid import UUID
 from typing import Optional, Any
 from datetime import date, datetime
 from pydantic import BaseModel, EmailStr, Field, field_validator, ConfigDict
 
 
 from app.core.exceptions import UsernameError
+
 
 class UserRole(str, enum.Enum):
     USER: str = 'user'
@@ -48,7 +50,7 @@ class BaseResponseV1(BaseModel):
 class UserCreateV1(UserBaseV1):
     password: str = Field(min_length=8)
 
-    model_config = ConfigDict(str_strip_whitespace=True, extra='forbid')
+    model_config = ConfigDict(str_strip_whitespace=True, extra='forbid', strict=True)
 
 
 class UserInDBV1(UserCreateV1):
@@ -73,13 +75,18 @@ class UserUpdateV1(BaseModel):
         if isinstance(e, EmailStr):
             return e.lower()
 
-    model_config = ConfigDict(str_strip_whitespace=True, extra='forbid')
+    model_config = ConfigDict(str_strip_whitespace=True, extra='forbid', strict=True)
 
 
 class UserReadV1(UserBaseV1):
+    id: UUID
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class UserProfileV1(UserReadV1):
+    age: int
 
 
 class RoleInDBV1(BaseModel):
@@ -92,6 +99,10 @@ class RoleCreateV1(RoleInDBV1):
 
 class UserResponseV1(BaseResponseV1):
     data: Optional[UserReadV1 | list[UserReadV1]] = None
+
+
+class UserProfileResponseV1(BaseResponseV1):
+    data: UserProfileV1
 
 
 class RoleResponseV1(BaseResponseV1):

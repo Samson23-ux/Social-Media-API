@@ -1,7 +1,7 @@
 from uuid import UUID
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
-from sqlalchemy import select, delete, and_
+from sqlalchemy import select, delete, and_, func
 
 from app.models.users import User, Role
 from app.models.images import Image, ProfileImage
@@ -9,11 +9,24 @@ from app.models.images import Image, ProfileImage
 
 class UserRepoV1:
     @staticmethod
+    def get_users(
+        db: Session,
+        nationality: str | None = None,
+        year: int | None = None,
+        sort: str | None = None,
+        order: str | None = None,
+        offset: int = 0,
+        limit: int = 10,
+    ) -> list[User]:
+        '''get users with filtering, sorting and pagination'''
+        
+
+    @staticmethod
     def get_user_by_id(user_id: UUID, db: Session) -> User | None:
         stmt = select(User).where(
             and_(User.id == str(user_id), User.is_delete.is_(False))
         )
-        user: User = db.execute(stmt).scalar()
+        user: User | None = db.execute(stmt).scalar()
         return user
 
     @staticmethod
@@ -21,25 +34,25 @@ class UserRepoV1:
         stmt = select(User).where(
             and_(User.username == username, User.is_delete.is_(False))
         )
-        user: User = db.execute(stmt).scalar()
+        user: User | None = db.execute(stmt).scalar()
         return user
 
     @staticmethod
     def get_user_by_email(email: str, db: Session) -> User | None:
         stmt = select(User).where(and_(User.email == email, User.is_delete.is_(False)))
-        user: User = db.execute(stmt).scalar()
+        user: User | None = db.execute(stmt).scalar()
         return user
 
     @staticmethod
     def get_deleted_users(email: str, db: Session) -> User | None:
         stmt = select(User).where(and_(User.email == email, User.is_delete.is_(True)))
-        user: User = db.execute(stmt).scalar()
+        user: User | None = db.execute(stmt).scalar()
         return user
 
     @staticmethod
     def get_role(role_name: str, db: Session) -> Role | None:
         stmt = select(Role).where(Role.name == role_name)
-        role: Role = db.execute(stmt).scalar()
+        role: Role | None = db.execute(stmt).scalar()
         return role
 
     @staticmethod
@@ -49,7 +62,7 @@ class UserRepoV1:
     @staticmethod
     def get_image_id(image_url: str, db: Session) -> UUID:
         stmt = select(Image.id).where(Image.image_url == image_url)
-        image_id = db.execute(stmt).scalar()
+        image_id: UUID = db.execute(stmt).scalar()
         return image_id
 
     @staticmethod

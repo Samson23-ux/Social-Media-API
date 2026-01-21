@@ -11,7 +11,7 @@ class AuthRepoV1:
     @staticmethod
     def get_refresh_token(token_id: UUID, db: Session) -> RefreshToken:
         stmt = select(RefreshToken).where(RefreshToken.id == str(token_id))
-        token = db.execute(stmt).scalar()
+        token: RefreshToken | None = db.execute(stmt).scalar()
         return token
 
     @staticmethod

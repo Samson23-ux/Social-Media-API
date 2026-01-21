@@ -5,8 +5,7 @@ from sentry_sdk import logger as sentry_logger
 from datetime import datetime, timezone, timedelta
 
 
-from app.models.users import User
-from app.core.config import settings
+from app.models.users import User, Role
 from app.models.auth import RefreshToken
 from app.api.v1.schemas.auth import RefreshTokenV1
 from app.api.v1.repositories.auth_repo import auth_repo_v1
@@ -20,35 +19,34 @@ from app.core.exceptions import (
     UserExistsError,
     CredentialError,
     UserNotFoundError,
-    AuthenticationError,
 )
 from app.core.security import (
     hash_token,
-    decode_token,
     hash_password,
     verify_password,
     create_access_token,
     create_refresh_token,
-    is_refresh_token_valid,
+    validate_refresh_token,
 )
+
 
 class AuthServiceV1:
     @staticmethod
     def prepare_tokens(user_id: UUID, username: str) -> dict:
         '''create access and refresh tokens'''
-        token_data = TokenDataV1(id=user_id, name=username)
-        access_token = create_access_token(token_data)
-        token = TokenV1(access_token=access_token)
+        token_data: TokenDataV1 = TokenDataV1(id=user_id, name=username)
+        access_token: str = create_access_token(token_data)
+        token: TokenV1 = TokenV1(access_token=access_token)
 
         refresh_token, token_id, token_exp = create_refresh_token(token_data)
-        token_create = RefreshToken(
+        token_create: RefreshToken = RefreshToken(
             **RefreshTokenV1(
                 token=refresh_token, user_id=user_id, expires_at=token_exp
             ).model_dump(),
             id=token_id
         )
 
-        data = {
+        data: dict = {
             'access_token': token,
             'token_create': token_create,
             'refresh_token_id': token_id,
@@ -63,7 +61,9 @@ class AuthServiceV1:
 
     @staticmethod
     def sign_up(user_create: UserCreateV1, db: Session) -> User:
-        user_with_email = user_repo_v1.get_user_by_email(user_create.email, db)
+        user_with_email: User | None = user_repo_v1.get_user_by_email(
+            user_create.email, db
+        )
 
         if user_with_email:
             sentry_logger.error(
@@ -71,7 +71,9 @@ class AuthServiceV1:
             )
             raise UserExistsError()
 
-        user_with_username = user_repo_v1.get_user_by_username(user_create.username, db)
+        user_with_username: User | None = user_repo_v1.get_user_by_username(
+            user_create.username, db
+        )
 
         if user_with_username:
             sentry_logger.error(
@@ -82,10 +84,10 @@ class AuthServiceV1:
 
         user_create.password = hash_password(user_create.password)
 
-        user_in_db = UserInDBV1(**user_create.model_dump())
-        role = user_service_v1.get_role(user_in_db.role, db)
+        user_in_db: UserInDBV1 = UserInDBV1(**user_create.model_dump())
+        role: Role = user_service_v1.get_role(user_in_db.role, db)
 
-        user = User(
+        user: User = User(
             **user_in_db.model_dump(exclude={'role', 'password'}),
             role_id=role.id,
             hash_password=user_create.password
@@ -101,23 +103,23 @@ class AuthServiceV1:
             sentry_logger.error('Internal server error while creating user')
             raise ServerError() from e
 
-        user_out = user_service_v1.get_user_by_id(user.id, db)
+        user_out: User = user_service_v1.get_user_by_id(user.id, db)
 
         return user_out
 
     @staticmethod
-    def sign_in(email: str, password: str, db: Session):
-        user_db = user_service_v1.get_user_by_email(email, db)
-        is_password_correct = verify_password(password, user_db.hash_password)
+    def sign_in(email: str, password: str, db: Session) -> tuple:
+        user_db: User = user_service_v1.get_user_by_email(email, db)
+        is_password_correct: bool = verify_password(password, user_db.hash_password)
 
         if not user_db or not is_password_correct:
             sentry_logger.error('Invalid Credentials while signing in')
             raise CredentialError()
 
         data = AuthServiceV1.prepare_tokens(user_db.id, user_db.username)
-        access_token = data.get('access_token')
+        access_token: str = data.get('access_token')
 
-        refresh_tokens = user_db.refresh_tokens
+        refresh_tokens: list[RefreshToken] = user_db.refresh_tokens
 
         # Revoke user's current valid refresh tokens before creating a new on on sign in
         if refresh_tokens:
@@ -141,7 +143,7 @@ class AuthServiceV1:
                         raise ServerError() from e
 
         try:
-            refresh_token = data.get('token_create')
+            refresh_token: RefreshToken = data.get('token_create')
             refresh_token_out = refresh_token.token
             refresh_token.token = hash_token(refresh_token.token)
             auth_repo_v1.store_refresh_token(refresh_token, db)
@@ -159,48 +161,37 @@ class AuthServiceV1:
         return access_token, refresh_token_out
 
     @staticmethod
-    def create_access_token(refresh_token: str, db: Session):
-        token = decode_token(refresh_token, settings.REFRESH_TOKEN_SECRET_KEY)
-
-        if not refresh_token or not token:
-            sentry_logger.error('Error authenticating user. Refresh token not valid')
-            raise AuthenticationError()
-
-        token_db = auth_repo_v1.get_refresh_token(token.get('jti'), db)
-
-        if token_db:
-            if not is_refresh_token_valid(token_db):
-                sentry_logger.error(
-                    'Error authenticating user. Refresh token {id} revoked or used',
-                    id=token_db.id,
-                )
-                raise AuthenticationError()
+    def create_access_token(refresh_token: str, db: Session) -> tuple:
+        # check if refresh token is valid
+        refresh_token_db: RefreshToken = validate_refresh_token(refresh_token, db)
 
         # mark refresh token as used and rotate token
-        token_db.status = TokenStatus.USED
-        token_db.used_at = datetime.now(timezone.utc)
+        refresh_token_db.status = TokenStatus.USED
+        refresh_token_db.used_at = datetime.now(timezone.utc)
 
         try:
-            auth_repo_v1.store_refresh_token(token_db, db)
+            auth_repo_v1.store_refresh_token(refresh_token_db, db)
             db.commit()
-            sentry_logger.info('Refresh token {id} status updated', id=token_db.id)
+            sentry_logger.info(
+                'Refresh token {id} status updated', id=refresh_token_db.id
+            )
         except Exception as e:
             db.rollback()
             sentry_sdk.capture_exception(e)
             sentry_logger.error(
                 'Internal server error while updating refresh token {id}',
-                id=token_db.id,
+                id=refresh_token_db.id,
             )
             raise ServerError() from e
 
-        user_db = token_db.user
+        user_db: User = refresh_token_db.user
 
-        data = AuthServiceV1.prepare_tokens(user_db.id, user_db.username)
-        access_token = data.get('access_token')
+        data: dict = AuthServiceV1.prepare_tokens(user_db.id, user_db.username)
+        access_token: str = data.get('access_token')
 
         try:
-            refresh_token = data.get('token_create')
-            refresh_token_out = refresh_token.token
+            refresh_token: RefreshToken = data.get('token_create')
+            refresh_token_out: str = refresh_token.token
             refresh_token.token = hash_token(refresh_token.token)
             auth_repo_v1.store_refresh_token(refresh_token, db)
             db.commit()
@@ -218,24 +209,10 @@ class AuthServiceV1:
 
     @staticmethod
     def sign_out(refresh_token: str, db: Session):
-        token = decode_token(refresh_token, settings.REFRESH_TOKEN_SECRET_KEY)
+        # check if refresh token is valid
+        refresh_token_db: RefreshToken = validate_refresh_token(refresh_token, db)
 
-        # raise authentication error if refresh token has expired
-        if not token:
-            sentry_logger.error('Error authenticating user. Refresh token not valid')
-            raise AuthenticationError()
-
-        refresh_token_db = auth_repo_v1.get_refresh_token(token.get('jti'), db)
-
-        # check if refresh token has not been used or revoked
-        if not is_refresh_token_valid(refresh_token_db):
-            sentry_logger.error(
-                'Error authenticating user. Refresh token {id} not valid',
-                id=refresh_token_db.id,
-            )
-            raise AuthenticationError()
-        else:
-            refresh_token_db = AuthServiceV1.revoke_refresh_token(refresh_token_db)
+        refresh_token_db = AuthServiceV1.revoke_refresh_token(refresh_token_db)
 
         try:
             auth_repo_v1.store_refresh_token(refresh_token_db, db)
@@ -259,24 +236,11 @@ class AuthServiceV1:
         new_password: str,
         user: User,
         db: Session,
-    ):
-        token = decode_token(refresh_token, settings.REFRESH_TOKEN_SECRET_KEY)
+    ) -> User:
+        # check if refresh token is valid
+        refresh_token_db: RefreshToken = validate_refresh_token(refresh_token, db)
 
-        # raise authentication error if refresh token has expired
-        if not token:
-            sentry_logger.error('Error authenticating user. Refresh token not valid')
-            raise AuthenticationError()
-
-        refresh_token_db = auth_repo_v1.get_refresh_token(token.get('jti'), db)
-
-        if not is_refresh_token_valid(refresh_token_db):
-            sentry_logger.error(
-                'Error authenticating user. Refresh token {id} not valid',
-                id=refresh_token_db.id,
-            )
-            raise AuthenticationError()
-        else:
-            token_db = AuthServiceV1.revoke_refresh_token(refresh_token_db)
+        token_db = AuthServiceV1.revoke_refresh_token(refresh_token_db)
 
         try:
             auth_repo_v1.store_refresh_token(token_db, db)
@@ -318,7 +282,7 @@ class AuthServiceV1:
         email: str,
         new_password: str,
         db: Session,
-    ):
+    ) -> User:
         user = user_service_v1.get_user_by_email(email, db)
 
         user.hash_password = hash_password(new_password)
@@ -338,7 +302,7 @@ class AuthServiceV1:
         return user
 
     @staticmethod
-    def restore_account(email: str, account_password, db: Session):
+    def restore_account(email: str, account_password, db: Session) -> User:
         user = user_repo_v1.get_deleted_users(email, db)
 
         if not user:
@@ -372,25 +336,10 @@ class AuthServiceV1:
     @staticmethod
     def delete_account(refresh_token: str, password: str, user: User, db: Session):
         '''deactivates user account'''
+        # check if refresh token is valid
+        refresh_token_db: RefreshToken = validate_refresh_token(refresh_token, db)
 
-        token = decode_token(refresh_token, settings.REFRESH_TOKEN_SECRET_KEY)
-
-        # raise authentication error if refresh token has expired
-        if not token:
-            sentry_logger.error('Error authenticating user. Refresh token not valid')
-            raise AuthenticationError()
-        
-
-        refresh_token_db = auth_repo_v1.get_refresh_token(token.get('jti'), db)
-
-        if not is_refresh_token_valid(refresh_token_db):
-            sentry_logger.error(
-                'Error authenticating user. Refresh token {id} not valid',
-                id=refresh_token_db.id,
-            )
-            raise AuthenticationError()
-        else:
-            AuthServiceV1.revoke_refresh_token(refresh_token_db)
+        AuthServiceV1.revoke_refresh_token(refresh_token_db)
 
         try:
             auth_repo_v1.store_refresh_token(refresh_token_db, db)

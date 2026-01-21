@@ -13,6 +13,7 @@ from sqlalchemy import (
     UUID,
     Computed,
     Index,
+    Integer
 )
 
 from app.database.base import Base
@@ -87,6 +88,7 @@ class Comment(Base):
     id = Column(UUID, default=text('uuid_generate_v4()'), primary_key=True)
     post_id = Column(UUID, ForeignKey('posts.id', ondelete='CASCADE'), nullable=False)
     user_id = Column(UUID, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    likes = Column(Integer, default=0, nullable=False)
     content = Column(Text, nullable=False)
     created_at = Column(
         DateTime(timezone=True), default=datetime.now(timezone.utc), nullable=False
