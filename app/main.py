@@ -28,7 +28,6 @@ sentry_sdk.init(
     # profile lifecycle controlled automatically
     # change to manual for more control on start and stop time
     profile_lifecycle='trace' 
-
 )
 
 
@@ -42,6 +41,7 @@ from app.core import exception_handlers
 
 app.include_router(auth_router_v1, prefix=settings.API_VERSION_PREFIX, tags=['Auth'])
 app.include_router(users_router_v1, prefix=settings.API_VERSION_PREFIX, tags=['Users'])
+app.include_router(users_router_v1, prefix=settings.API_VERSION_PREFIX, tags=['Posts'])
 
 
 # check api health status

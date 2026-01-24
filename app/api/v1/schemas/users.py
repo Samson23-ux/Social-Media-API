@@ -86,6 +86,11 @@ class UserReadV1(UserBaseV1):
 
 
 class UserProfileV1(UserReadV1):
+    followers: int
+    following: int
+
+
+class CurrentUserProfileV1(UserProfileV1):
     age: int
 
 
@@ -102,7 +107,7 @@ class UserResponseV1(BaseResponseV1):
 
 
 class UserProfileResponseV1(BaseResponseV1):
-    data: UserProfileV1
+    data: UserProfileV1 | CurrentUserProfileV1
 
 
 class RoleResponseV1(BaseResponseV1):

@@ -303,7 +303,7 @@ class AuthServiceV1:
 
     @staticmethod
     def restore_account(email: str, account_password, db: Session) -> User:
-        user = user_repo_v1.get_deleted_users(email, db)
+        user = user_repo_v1.get_deleted_user(email, db)
 
         if not user:
             sentry_logger.error('User with email: {email} not found', email=email)

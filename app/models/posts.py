@@ -13,7 +13,7 @@ from sqlalchemy import (
     UUID,
     Computed,
     Index,
-    Integer
+    Integer,
 )
 
 from app.database.base import Base
@@ -34,12 +34,17 @@ class Post(Base):
     content_search = Column(
         TSVECTOR, Computed("to_tsvector('english', \'content\')", persisted=True)
     )
-    user_id = Column(UUID, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    user_id = Column(
+        UUID, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True
+    )
     visibility = Column(
         Enum(VisibilityEnum), default=VisibilityEnum.PUBLIC, nullable=False
     )
     created_at = Column(
-        DateTime(timezone=True), default=datetime.now(timezone.utc), nullable=False
+        DateTime(timezone=True),
+        default=datetime.now(timezone.utc),
+        nullable=False,
+        index=True,
     )
 
     user = relationship('User', back_populates='posts', viewonly=True)
@@ -66,14 +71,24 @@ class Post(Base):
 
     __table_args__ = (
         Index('idx_content_search', content_search, postgresql_using='gin'),
+        Index(
+            'idx_title',
+            title,
+            postgresql_using='gin',
+            postgresql_ops={'title': 'gin_trgm_ops'},
+        ),
     )
 
 
 class Like(Base):
     __tablename__ = 'likes'
 
-    post_id = Column(UUID, ForeignKey('posts.id', ondelete='CASCADE'), primary_key=True)
-    user_id = Column(UUID, ForeignKey('users.id', ondelete='CASCADE'), primary_key=True)
+    post_id = Column(
+        UUID, ForeignKey('posts.id', ondelete='CASCADE'), primary_key=True, index=True
+    )
+    user_id = Column(
+        UUID, ForeignKey('users.id', ondelete='CASCADE'), primary_key=True, index=True
+    )
     liked_at = Column(
         DateTime(timezone=True), default=datetime.now(timezone.utc), nullable=False
     )
@@ -86,8 +101,12 @@ class Comment(Base):
     __tablename__ = 'comments'
 
     id = Column(UUID, default=text('uuid_generate_v4()'), primary_key=True)
-    post_id = Column(UUID, ForeignKey('posts.id', ondelete='CASCADE'), nullable=False)
-    user_id = Column(UUID, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    post_id = Column(
+        UUID, ForeignKey('posts.id', ondelete='CASCADE'), nullable=False, index=True
+    )
+    user_id = Column(
+        UUID, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True
+    )
     likes = Column(Integer, default=0, nullable=False)
     content = Column(Text, nullable=False)
     created_at = Column(

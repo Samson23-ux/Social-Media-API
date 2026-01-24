@@ -5,16 +5,22 @@ from app.main import app
 from app.core.exceptions import (
     create_exception_handler,
     ServerError,
-    AuthenticationError,
-    AuthorizationError,
-    UserNotFoundError,
-    UserExistsError,
-    RoleExistsError,
-    ProfileImageExistsError,
-    ProfileImageError,
-    CredentialError,
-    PasswordError,
     UsernameError,
+    PasswordError,
+    PostsNotFound,
+    CredentialError,
+    RoleExistsError,
+    UserExistsError,
+    CommentsNotFound,
+    UserNotFoundError,
+    ProfileImageError,
+    UsersNotFoundError,
+    AuthorizationError,
+    AuthenticationError,
+    AvatarNotFoundError,
+    FollowingNotFoundError,
+    FollowersNotFoundError,
+    ProfileImageExistsError,
 )
 
 error_time: datetime = datetime.now(timezone.utc).isoformat()
@@ -66,6 +72,19 @@ app.add_exception_handler(
         },
     ),
 )
+
+app.add_exception_handler(
+    exc_class_or_status_code=UsersNotFoundError,
+    handler=create_exception_handler(
+        status_code=404,
+        initial_detail={
+            'error_code': 'Users not found',
+            'message': 'No users at the moment. Check back later!',
+            'timestamp': error_time,
+        },
+    ),
+)
+
 
 app.add_exception_handler(
     exc_class_or_status_code=UserNotFoundError,
@@ -135,6 +154,20 @@ app.add_exception_handler(
 
 
 app.add_exception_handler(
+    exc_class_or_status_code=AvatarNotFoundError,
+    handler=create_exception_handler(
+        status_code=404,
+        initial_detail={
+            'error_code': 'Avatar not found',
+            'message': 'No Avatar found for the provided user',
+            'resolution': 'Ensure the provided image url is correct',
+            'timestamp': error_time,
+        },
+    ),
+)
+
+
+app.add_exception_handler(
     exc_class_or_status_code=CredentialError,
     handler=create_exception_handler(
         status_code=400,
@@ -168,6 +201,54 @@ app.add_exception_handler(
             'error_code': 'Invalid username',
             'message': 'Username is not valid ',
             'resolution': 'Username must have a minimum length of 6 characters and can only contain underscores(_) e.g -> @user_example',
+            'timestamp': error_time,
+        },
+    ),
+)
+
+app.add_exception_handler(
+    exc_class_or_status_code=FollowersNotFoundError,
+    handler=create_exception_handler(
+        status_code=404,
+        initial_detail={
+            'error_code': 'Followers not found',
+            'message': 'User does not have any followers',
+            'timestamp': error_time,
+        },
+    ),
+)
+
+app.add_exception_handler(
+    exc_class_or_status_code=FollowingNotFoundError,
+    handler=create_exception_handler(
+        status_code=404,
+        initial_detail={
+            'error_code': 'Following not found',
+            'message': 'User has not followed any account',
+            'timestamp': error_time,
+        },
+    ),
+)
+
+app.add_exception_handler(
+    exc_class_or_status_code=CommentsNotFound,
+    handler=create_exception_handler(
+        status_code=404,
+        initial_detail={
+            'error_code': 'Comments not found',
+            'message': 'No comments found at the moment',
+            'timestamp': error_time,
+        },
+    ),
+)
+
+app.add_exception_handler(
+    exc_class_or_status_code=PostsNotFound,
+    handler=create_exception_handler(
+        status_code=404,
+        initial_detail={
+            'error_code': 'Posts not found',
+            'message': 'No Posts found at the moment',
             'timestamp': error_time,
         },
     ),

@@ -10,23 +10,32 @@ from app.utils import write_file
 from app.core.config import settings
 from app.models.users import User, Role
 from app.models.auth import RefreshToken
+from app.models.posts import Post, Comment
 from app.models.images import Image, ProfileImage
+from app.core.security import validate_refresh_token
 from app.api.v1.repositories.user_repo import user_repo_v1
 from app.api.v1.schemas.images import ImageInDBV1, ImageReadV1
-from app.core.security import validate_refresh_token
+from app.api.v1.schemas.posts import PostReadV1, CommentReadV1, CommentReadBaseV1
 from app.api.v1.schemas.users import (
+    UserReadV1,
     RoleCreateV1,
     UserUpdateV1,
     UserProfileV1,
-    UserReadV1,
+    CurrentUserProfileV1,
 )
 
 from app.core.exceptions import (
     ServerError,
+    PostsNotFound,
     RoleExistsError,
     UserExistsError,
+    CommentsNotFound,
     UserNotFoundError,
     ProfileImageError,
+    UsersNotFoundError,
+    AvatarNotFoundError,
+    FollowersNotFoundError,
+    FollowingNotFoundError,
     ProfileImageExistsError,
 )
 
@@ -42,16 +51,66 @@ class UserServiceV1:
         order: str | None = None,
         offset: int = 0,
         limit: int = 10,
-    ):
+    ) -> list[User]:
         _ = validate_refresh_token(refresh_token, db)
+
+        try:
+            users = user_repo_v1.get_users(
+                db, nationality, year, sort, order, offset, limit
+            )
+            if not users:
+                sentry_logger.error('Users not found in database')
+                raise UsersNotFoundError()
+            sentry_logger.info('Users retrieved from database successfully')
+            return users
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            sentry_logger.error('Error occured retrieving users from database')
+            raise ServerError() from e
+
+    @staticmethod
+    def search_users(
+        db: Session,
+        refresh_token: RefreshToken,
+        q: str,
+        nationality: str | None = None,
+        year: int | None = None,
+        sort: str | None = None,
+        order: str | None = None,
+        offset: int = 0,
+        limit: int = 10,
+    ) -> list[User]:
+        _ = validate_refresh_token(refresh_token, db)
+
+        try:
+            users = user_repo_v1.search_users(
+                db, q, nationality, year, sort, order, offset, limit
+            )
+            if not users:
+                sentry_logger.error('Searched users not found in database')
+                raise UsersNotFoundError()
+            sentry_logger.info('Searched users retrieved from database successfully')
+            return users
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            sentry_logger.error('Error occured retrieving searched users from database')
+            raise ServerError() from e
 
     @staticmethod
     def get_user_by_id(user_id: UUID, db: Session) -> User:
-        user = user_repo_v1.get_user_by_id(user_id, db)
-        if not user:
-            sentry_logger.error('User with email: {id} not found', id=user_id)
-            raise UserNotFoundError()
-        return user
+        try:
+            user = user_repo_v1.get_user_by_id(user_id, db)
+            if not user:
+                sentry_logger.error('User with email: {id} not found', id=user_id)
+                raise UserNotFoundError()
+            sentry_logger.info('User {id} retrieved successfully', id=user_id)
+            return user
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            sentry_logger.error(
+                'Error occured while retrieving user {id} from database', id=user_id
+            )
+            raise ServerError() from e
 
     @staticmethod
     def get_user_by_email(email: str, db: Session) -> User:
@@ -62,23 +121,62 @@ class UserServiceV1:
         return user
 
     @staticmethod
-    def get_user_by_username(username: str, db: Session) -> User:
+    def get_user_by_username(
+        username: str, db: Session, refresh_token: RefreshToken = None
+    ) -> User:
+        if refresh_token:
+            _ = validate_refresh_token(refresh_token, db)
+
         user = user_repo_v1.get_user_by_username(username, db)
         if not user:
             sentry_logger.error(
-                'User with email: {username} not found', username=username
+                'User with username: {username} not found', username=username
             )
             raise UserNotFoundError()
         return user
 
     @staticmethod
     def get_user_profile(
-        user: User, refresh_token: RefreshToken, db: Session
+        username: str, refresh_token: RefreshToken, db: Session
     ) -> UserProfileV1:
+        '''get other user profile with username
+        the age of the owner's profile is not visible to public'''
         _ = validate_refresh_token(refresh_token, db)
 
+        user = user_repo_v1.get_user_by_username(username, db)
+        if not user:
+            sentry_logger.error(
+                'User with username: {username} not found', username=username
+            )
+            raise UserNotFoundError()
+
+        # get user followers and following
+        followers, following = user.followers, user.following
+
         user_read = UserReadV1.model_validate(user)
-        user_profile = UserProfileV1(**user_read.model_dump(), age=user.age)
+        user_profile = UserProfileV1(
+            **user_read.model_dump(), followers=len(followers), following=len(following)
+        )
+
+        return user_profile
+
+    @staticmethod
+    def get_current_user_profile(
+        user: User, refresh_token: RefreshToken, db: Session
+    ) -> CurrentUserProfileV1:
+        '''get current user profile with username and age'''
+        _ = validate_refresh_token(refresh_token, db)
+
+        # get user followers and following
+        followers, following = user.followers, user.following
+
+        user_read = UserReadV1.model_validate(user)
+        user_profile = CurrentUserProfileV1(
+            **user_read.model_dump(),
+            followers=len(followers),
+            following=len(following),
+            age=user.age,
+        )
 
         return user_profile
 
@@ -88,8 +186,391 @@ class UserServiceV1:
         return role
 
     @staticmethod
+    def get_followers(
+        current_user: User, username: str, refresh_token: RefreshToken, db: Session
+    ):
+        _ = validate_refresh_token(refresh_token, db)
+
+        try:
+            '''only query db if current user tries to get otheruser's followers'''
+            if current_user.username == username:
+                '''get the current user's followers'''
+                followers: list[User] | None = user_repo_v1.get_followers(current_user)
+            else:
+                '''get other user's followers'''
+                user: User | None = user_repo_v1.get_user_by_username(username, db)
+
+                if not user:
+                    sentry_logger.error(
+                        'User with username: {username} not found', username=username
+                    )
+                    raise UserNotFoundError()
+
+                followers: list[User] | None = user_repo_v1.get_followers(user)
+
+            if not followers:
+                sentry_logger.error('{username} followers not found', username=username)
+                raise FollowersNotFoundError()
+
+            sentry_logger.info(
+                '{username} followers retrieved from database', username=username
+            )
+
+            return followers
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            sentry_logger.error(
+                'Internal server error occured while retrieving {username} followers',
+                username=username,
+            )
+            raise ServerError() from e
+
+    @staticmethod
+    def get_followings(
+        current_user: User, username: str, refresh_token: RefreshToken, db: Session
+    ):
+        _ = validate_refresh_token(refresh_token, db)
+
+        try:
+            '''only query db if current user tries to get other user's followings'''
+            if current_user.username == username:
+                '''get the current user's followings'''
+                followings: list[User] | None = user_repo_v1.get_followings(
+                    current_user
+                )
+            else:
+                '''get other user's followings'''
+                user: User | None = user_repo_v1.get_user_by_username(username, db)
+
+                if not user:
+                    sentry_logger.error(
+                        'User with username: {username} not found', username=username
+                    )
+                    raise UserNotFoundError()
+
+                followings: list[User] | None = user_repo_v1.get_followings(user)
+
+            if not followings:
+                sentry_logger.error(
+                    '{username} followings not found', username=username
+                )
+                raise FollowingNotFoundError()
+
+            sentry_logger.info(
+                '{username} followings retrieved from database', username=username
+            )
+
+            return followings
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            sentry_logger.error(
+                'Internal server error occured while retrieving {username} followings',
+                username=username,
+            )
+            raise ServerError() from e
+
+    @staticmethod
+    def get_user_posts(
+        current_user: User,
+        username: str,
+        refresh_token: str,
+        db: Session,
+        created_at: int | None = None,
+        sort: str | None = None,
+        order: str | None = None,
+        offset: int = 0,
+        limit: int = 10,
+    ) -> list[PostReadV1]:
+        _ = validate_refresh_token(refresh_token, db)
+
+        user: User | None = user_repo_v1.get_user_by_username(username, db)
+
+        if not user:
+            sentry_logger.error(
+                'User with username: {username} not found', username=username
+            )
+            raise UserNotFoundError()
+
+        try:
+            if current_user.username == username:
+                '''select all posts made by the current logged in user'''
+                user_id = current_user.id
+
+                posts_db: list[Post] | None = user_repo_v1.get_current_user_posts(
+                    user.id, db, created_at, sort, order, offset, limit
+                )
+            else:
+                '''select all posts by the user with the provided username
+                that the current logged in user should see that is posts
+                set to public and posts set to followers if the current
+                logged in user is a follower'''
+                user_id = user.id
+
+                posts_db: list[Post] | None = user_repo_v1.get_user_posts(
+                    current_user,
+                    user,
+                    user.id,
+                    db,
+                    created_at,
+                    sort,
+                    order,
+                    offset,
+                    limit,
+                )
+
+            if not posts_db:
+                sentry_logger.error('{username} posts not found', username=username)
+                raise PostsNotFound()
+
+            user_posts: list[PostReadV1] = []
+            for post_db in posts_db:
+                (
+                    id,
+                    title,
+                    content,
+                    visibility,
+                    created_at,
+                    display_name,
+                    username,
+                    comments,
+                    likes,
+                ) = post_db
+
+                post_read = PostReadV1(
+                    id=id,
+                    title=title,
+                    content=content,
+                    visibility=visibility,
+                    created_at=created_at,
+                    display_name=display_name,
+                    username=username,
+                    comments=comments,
+                    likes=likes,
+                )
+                user_posts.append(post_read)
+
+            sentry_logger.info('User {id} posts retrieved from database', id=user_id)
+            return user_posts
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            sentry_logger.error(
+                'Internal server ocured while retrieving user {id} posts from database',
+                id=user_id,
+            )
+            raise ServerError() from e
+
+    @staticmethod
+    def get_liked_post(
+        current_user: User,
+        username: str,
+        refresh_token: RefreshToken,
+        db: Session,
+        offset: int = 0,
+        limit: int = 10,
+    ) -> list[PostReadV1]:
+        _ = validate_refresh_token(refresh_token, db)
+
+        try:
+            '''only query db if current user tries to get other user's liked posts'''
+            if current_user.username == username:
+                liked_posts = user_repo_v1.get_liked_posts(
+                    current_user.id, db, offset, limit
+                )
+            else:
+                user: User | None = user_repo_v1.get_user_by_username(username, db)
+
+                if not user:
+                    sentry_logger.error(
+                        'User with username: {username} not found', username=username
+                    )
+                    raise UserNotFoundError()
+
+                liked_posts = user_repo_v1.get_liked_posts(user.id, db, offset, limit)
+
+            if not liked_posts:
+                sentry_logger.error('{username} posts not found', username=username)
+                raise PostsNotFound()
+
+            user_posts: list[PostReadV1] = []
+            for post_db in liked_posts:
+                (
+                    display_name,
+                    username,
+                    id,
+                    title,
+                    content,
+                    visibility,
+                    created_at,
+                ) = post_db
+
+                post_read = PostReadV1(
+                    id=id,
+                    title=title,
+                    content=content,
+                    visibility=visibility,
+                    created_at=created_at,
+                    display_name=display_name,
+                    username=username,
+                    comments=len(post_db.comments),
+                    likes=len(post_db.likes),
+                )
+                user_posts.append(post_read)
+
+            sentry_logger.info(
+                'User {username} posts retrieved from database', username=username
+            )
+            return user_posts
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            sentry_logger.error(
+                'Internal server error occured while retrieving {username} liked posts',
+                username=username,
+            )
+            raise ServerError() from e
+
+    @staticmethod
+    def get_user_comments(
+        current_user: User, username: str, refresh_token: RefreshToken, db: Session
+    ) -> list[CommentReadV1]:
+        _ = validate_refresh_token(refresh_token, db)
+
+        try:
+            '''only query db if current user tries to get otheruser's followings'''
+            if current_user.username == username:
+                '''get current user's comments'''
+                comments: list[Comment] | None = user_repo_v1.get_user_comments(
+                    current_user
+                )
+                display_name = current_user.display_name
+            else:
+                '''get other user's comments'''
+                user: User | None = user_repo_v1.get_user_by_username(username, db)
+
+                if not user:
+                    sentry_logger.error(
+                        'User with username: {username} not found', username=username
+                    )
+                    raise UserNotFoundError()
+
+                comments: list[Comment] | None = user_repo_v1.get_user_comments(user)
+                display_name = user.display_name
+
+            if not comments:
+                sentry_logger.error(
+                    'Comments for {username} not found', username=username
+                )
+                raise CommentsNotFound()
+
+            user_comments: list[CommentReadV1] = []
+            for comment in comments:
+                comment_read_base = CommentReadBaseV1.model_validate(comment)
+                comment_read = CommentReadV1(
+                    **comment_read_base.model_dump(),
+                    display_name=display_name,
+                    username=username,
+                    likes=comment.likes,
+                )
+                user_comments.append(comment_read)
+
+            sentry_logger.info(
+                '{username} comments retrieved from database', username=username
+            )
+            return user_comments
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            sentry_logger.error(
+                'Internal server error occured while retrieving {username} comments from db',
+                username=username,
+            )
+            raise ServerError() from e
+
+    @staticmethod
+    async def get_user_avatar(
+        current_user: User,
+        username: User,
+        refresh_token: RefreshToken,
+        image_url: str,
+        db: Session,
+    ):
+        _ = validate_refresh_token(refresh_token, db)
+
+        try:
+            '''only query db if current user tries to get otheruser's followings'''
+            if current_user.username == username:
+                '''get current user avatar'''
+                url: str | None = user_repo_v1.get_user_avatar(image_url, current_user.id, db)
+            else:
+                '''get other user avatar'''
+
+                user: User | None = user_repo_v1.get_user_by_username(username, db)
+
+                if not user:
+                    sentry_logger.error(
+                        'User with username: {username} not found', username=username
+                    )
+                    raise UserNotFoundError()
+
+                url: str | None = user_repo_v1.get_user_avatar(image_url, user.id, db)
+
+            if not url:
+                sentry_logger.error('{username} avatar not found', username=username)
+                raise AvatarNotFoundError()
+            
+            path: Path = Path(settings.PROFILE_IMAGE_PATH).resolve()
+            filepath: str = f'{str(path)}\\{url}'
+
+            sentry_logger.info('{username} avatar retrieved from database', username=username)
+            return filepath
+        except Exception as e:
+                sentry_sdk.capture_exception(e)
+                sentry_logger.error(
+                    'Internal server error occured while retrieving {username} avatar from db',
+                    username=username,
+                )
+                raise ServerError() from e
+
+    @staticmethod
     def add_user(user: User, db: Session):
+        '''create and update a user'''
         user_repo_v1.add_user(user, db)
+
+    @staticmethod
+    def follow_user(
+        current_user: User, username: str, refresh_token: RefreshToken, db: Session
+    ):
+        _ = validate_refresh_token(refresh_token, db)
+
+        user: User = user_repo_v1.get_user_by_username(username, db)
+
+        if not user:
+            sentry_logger.error(
+                'User not found while attempting to follow {username}',
+                username=username,
+            )
+            raise UserNotFoundError()
+
+        '''ensure idempotency by checking if the current user is already
+        following user or simply just return if a user tries to follow themselves'''
+        if user in current_user.following or current_user.username == username:
+            return
+
+        try:
+            user_repo_v1.follow_user(current_user, user, db)
+            db.commit()
+            sentry_logger.info(
+                '{current_user} followed {user} successfully',
+                current_user=current_user,
+                user=user.username,
+            )
+        except Exception as e:
+            db.rollback()
+            sentry_sdk.capture_exception(e)
+            sentry_logger.error(
+                'Internal server error occured while {current_user} attempted to follow {user}',
+                current_user=current_user,
+                user=user.username,
+            )
+            raise ServerError() from e
 
     @staticmethod
     def create_role(role_create: RoleCreateV1, db: Session) -> Role:
@@ -118,47 +599,6 @@ class UserServiceV1:
 
         role_out = user_repo_v1.get_role(role_db.name, db)
         return role_out
-
-    @staticmethod
-    def update_user(
-        user_update: UserUpdateV1, user: User, refresh_token: str, db: Session
-    ) -> User:
-        _ = validate_refresh_token(refresh_token, db)
-
-        if user_update.email and user_repo_v1.get_user_by_email(user_update.email, db):
-            sentry_logger.error(
-                'User with email {email} exists', email=user_update.email
-            )
-            raise UserExistsError()
-
-        if user_update.username and user_repo_v1.get_user_by_username(
-            user_update.username, db
-        ):
-            sentry_logger.error(
-                'User with username {username} exists',
-                email=user_update.username,
-            )
-            raise UserExistsError()
-
-        user_update_dict: dict = user_update.model_dump(exclude_unset=True)
-
-        for k, v in user_update_dict.items():
-            setattr(user, k, v)
-
-        try:
-            user_repo_v1.add_user(user, db)
-            sentry_logger.info('User {id} profile updated', id=user.id)
-            db.commit()
-        except Exception as e:
-            db.rollback()
-            sentry_sdk.capture_exception(e)
-            sentry_logger.error(
-                'Internal server error occured while updating user {id} profile',
-                id=user.id,
-            )
-            raise ServerError() from e
-
-        return user_repo_v1.get_user_by_id(user.id, db)
 
     @staticmethod
     async def upload_image(
@@ -235,12 +675,89 @@ class UserServiceV1:
 
         profile_images: list[ProfileImage] = user_repo_v1.get_user_images(user)
 
-        image_urls = []
+        image_urls: list[str] = []
         for i in profile_images:
             image_urls.append(i.image.image_url)
 
         images: ImageReadV1 = ImageReadV1(image_url=image_urls)
         return images
+
+    @staticmethod
+    def update_user(
+        user_update: UserUpdateV1, user: User, refresh_token: str, db: Session
+    ) -> User:
+        _ = validate_refresh_token(refresh_token, db)
+
+        if user_update.email and user_repo_v1.get_user_by_email(user_update.email, db):
+            sentry_logger.error(
+                'User with email {email} exists', email=user_update.email
+            )
+            raise UserExistsError()
+
+        if user_update.username and user_repo_v1.get_user_by_username(
+            user_update.username, db
+        ):
+            sentry_logger.error(
+                'User with username {username} exists',
+                email=user_update.username,
+            )
+            raise UserExistsError()
+
+        user_update_dict: dict = user_update.model_dump(exclude_unset=True)
+
+        for k, v in user_update_dict.items():
+            setattr(user, k, v)
+
+        try:
+            user_repo_v1.add_user(user, db)
+            sentry_logger.info('User {id} profile updated', id=user.id)
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            sentry_sdk.capture_exception(e)
+            sentry_logger.error(
+                'Internal server error occured while updating user {id} profile',
+                id=user.id,
+            )
+            raise ServerError() from e
+
+        return user_repo_v1.get_user_by_id(user.id, db)
+
+    @staticmethod
+    def unfollow_user(
+        current_user: User, username: str, refresh_token: RefreshToken, db: Session
+    ):
+        _ = validate_refresh_token(refresh_token, db)
+
+        user: User = user_repo_v1.get_user_by_username(username, db)
+
+        if not user:
+            sentry_logger.error(
+                'User not found while attempting to follow {username}',
+                username=username,
+            )
+            raise UserNotFoundError()
+
+        if current_user.username == username or user not in current_user.following:
+            return
+
+        try:
+            user_repo_v1.unfollow_user(current_user, user, db)
+            db.commit()
+            sentry_logger.info(
+                '{current_user} unfollowed {user} successfully',
+                current_user=current_user,
+                user=user.username,
+            )
+        except Exception as e:
+            db.rollback()
+            sentry_sdk.capture_exception(e)
+            sentry_logger.error(
+                'Internal server error occured while {current_user} attempted to unfollow {user}',
+                current_user=current_user,
+                user=user.username,
+            )
+            raise ServerError() from e
 
     @staticmethod
     def delete_user_accounts(db: Session):

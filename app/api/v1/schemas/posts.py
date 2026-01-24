@@ -40,26 +40,29 @@ class PostCreateV1(PostBaseV1):
 
 class PostReadBaseV1(PostBaseV1):
     id: UUID
-    display_name: str
-    username: str
-    likes: int
     created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CommentReadBaseV1(CommentBaseV1):
     id: UUID
-    display_name: str
-    username: str
-    likes: int
     created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PostReadV1(PostReadBaseV1):
-    comments: list[CommentReadBaseV1]
+    display_name: str
+    username: str
+    likes: int
+    comments: int
 
 
 class CommentReadV1(CommentReadBaseV1):
-    post: PostReadBaseV1
+    display_name: str
+    username: str
+    likes: int
 
 
 class PostResponseV1(BaseResponseV1):

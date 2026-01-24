@@ -9,7 +9,7 @@ class Image(Base):
     __tablename__ = 'images'
 
     id = Column(UUID, default=text('uuid_generate_v4()'), primary_key=True)
-    image_url = Column(VARCHAR(20), nullable=False)
+    image_url = Column(VARCHAR(20), nullable=False, index=True)
     image_type = Column(VARCHAR(20), nullable=False)
     image_size = Column(Integer, nullable=False)
     created_at = Column(
@@ -39,8 +39,12 @@ class ProfileImage(Base):
     __tablename__ = 'profile_images'
 
     id = Column(UUID, default=text('uuid_generate_v4()'), primary_key=True)
-    user_id = Column(UUID, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
-    image_id = Column(UUID, ForeignKey('images.id', ondelete='CASCADE'), nullable=False)
+    user_id = Column(
+        UUID, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True
+    )
+    image_id = Column(
+        UUID, ForeignKey('images.id', ondelete='CASCADE'), nullable=False, index=True
+    )
 
     user = relationship('User', back_populates='profile_images', viewonly=True)
     image = relationship('Image', back_populates='profile_images', viewonly=True)
@@ -50,8 +54,12 @@ class PostImage(Base):
     __tablename__ = 'post_images'
 
     id = Column(UUID, default=text('uuid_generate_v4()'), primary_key=True)
-    post_id = Column(UUID, ForeignKey('posts.id', ondelete='CASCADE'), nullable=False)
-    image_id = Column(UUID, ForeignKey('images.id', ondelete='CASCADE'), nullable=False)
+    post_id = Column(
+        UUID, ForeignKey('posts.id', ondelete='CASCADE'), nullable=False, index=True
+    )
+    image_id = Column(
+        UUID, ForeignKey('images.id', ondelete='CASCADE'), nullable=False, index=True
+    )
 
     post = relationship('Post', back_populates='post_images', viewonly=True)
     image = relationship('Image', back_populates='post_images', viewonly=True)

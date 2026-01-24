@@ -14,8 +14,11 @@ def create_roles():
 
     db_gen = get_db()
     db = next(db_gen)
-    user_service_v1.create_role(admin_role, db)
-    user_service_v1.create_role(user_role, db)
+    try:
+        user_service_v1.create_role(admin_role, db)
+        user_service_v1.create_role(user_role, db)
+    finally:
+        db.close()
 
 # create a first and core admin user
 def create_admin_user():

@@ -5,17 +5,21 @@ from sqlalchemy import Column, UUID, Text, ForeignKey, Enum, DateTime
 
 from app.database.base import Base
 
+
 class TokenStatus(str, enum.Enum):
     VALID: str = 'valid'
     REVOKED: str = 'revoked'
     USED: str = 'used'
+
 
 class RefreshToken(Base):
     __tablename__ = 'refresh_tokens'
 
     id = Column(UUID, primary_key=True)
     token = Column(Text, nullable=False, index=True)
-    user_id = Column(UUID, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    user_id = Column(
+        UUID, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True
+    )
     status = Column(Enum(TokenStatus), default=TokenStatus.VALID, nullable=False)
     created_at = Column(
         DateTime(timezone=True), default=datetime.now(timezone.utc), nullable=False

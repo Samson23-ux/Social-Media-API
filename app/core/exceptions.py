@@ -23,6 +23,11 @@ class AuthorizationError(AppException):
 
     pass
 
+class UsersNotFoundError(AppException):
+    '''Users not found'''
+
+    pass
+
 class UserNotFoundError(AppException):
     '''User not found'''
 
@@ -32,6 +37,17 @@ class UserExistsError(AppException):
     '''User already exists'''
 
     pass
+
+class FollowersNotFoundError(AppException):
+    '''Followers not found'''
+
+    pass
+
+class FollowingNotFoundError(AppException):
+    '''Following not found'''
+
+    pass
+
 
 class RoleExistsError(AppException):
     '''Role already exists'''
@@ -48,6 +64,11 @@ class ProfileImageExistsError(AppException):
 
     pass
 
+class AvatarNotFoundError(AppException):
+    '''user avatar not found'''
+
+    pass
+
 class CredentialError(AppException):
     '''User provided invalid credentials'''
 
@@ -60,6 +81,16 @@ class PasswordError(AppException):
 
 class UsernameError(AppException):
     '''Invalid username'''
+
+    pass
+
+class CommentsNotFound(AppException):
+    '''comments not found'''
+
+    pass
+
+class PostsNotFound(AppException):
+    '''posts not found'''
 
     pass
 

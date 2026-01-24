@@ -50,17 +50,23 @@ class User(Base):
     username = Column(VARCHAR(50), nullable=False, unique=True)
     email = Column(VARCHAR(50), unique=True, nullable=False, index=True)
     dob = Column(Date, nullable=False)
-    nationality = Column(VARCHAR(50), nullable=False)
+    nationality = Column(VARCHAR(50), nullable=False, index=True)
     hash_password = Column(Text, nullable=False)
-    role_id = Column(UUID, ForeignKey('roles.id', ondelete='RESTRICT'), nullable=False)
+    role_id = Column(
+        UUID, ForeignKey('roles.id', ondelete='RESTRICT'), nullable=False, index=True
+    )
     bio = Column(Text)
     is_delete = Column(Boolean, default=False, nullable=False)
     created_at = Column(
-        DateTime(timezone=True), default=datetime.now(timezone.utc), nullable=False
+        DateTime(timezone=True),
+        default=datetime.now(timezone.utc),
+        nullable=False,
+        index=True,
     )
     deleted_at = Column(DateTime(timezone=True))
     delete_at = Column(DateTime(timezone=True))
 
+    # only visible to the owner's account
     @property
     def age(self):
         # returns the user age
