@@ -378,6 +378,7 @@ class AuthServiceV1:
 
     @staticmethod
     def delete_user_account(refresh_token: str, password: str, user: User, db: Session):
+        '''delete account permanently'''
         refresh_token_db = validate_refresh_token(refresh_token, db)
 
         AuthServiceV1.revoke_refresh_token(refresh_token_db)

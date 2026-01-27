@@ -8,7 +8,6 @@ from sentry_sdk import logger as sentry_logger
 from app.utils import write_file
 from app.models.users import User
 from app.core.config import settings
-from app.models.auth import RefreshToken
 from app.core.exceptions import ServerError
 from app.api.v1.schemas.users import UserRole
 from app.models.images import Image, PostImage
@@ -40,7 +39,7 @@ class PostServiceV1:
     @staticmethod
     def get_feed_posts(
         user: User,
-        refresh_token: RefreshToken,
+        refresh_token: str,
         db: Session,
         offset: int = 0,
         limit: int = 10,
@@ -90,7 +89,7 @@ class PostServiceV1:
     @staticmethod
     def get_search_posts(
         user: User,
-        refresh_token: RefreshToken,
+        refresh_token: str,
         db: Session,
         q: str,
         created_at: int | None = None,
@@ -153,7 +152,7 @@ class PostServiceV1:
     @staticmethod
     def get_following_posts(
         user: User,
-        refresh_token: RefreshToken,
+        refresh_token: str,
         db: Session,
         offset: int = 0,
         limit: int = 10,
@@ -189,7 +188,7 @@ class PostServiceV1:
     def get_post_comments(
         user: User,
         post_id: UUID,
-        refresh_token: RefreshToken,
+        refresh_token: str,
         db: Session,
         sort: str | None = None,
         order: str | None = None,
@@ -239,7 +238,7 @@ class PostServiceV1:
 
     @staticmethod
     def get_post_by_id(
-        post_id: UUID, refresh_token: RefreshToken, db: Session
+        post_id: UUID, refresh_token: str, db: Session
     ) -> PostReadV1:
         _ = validate_refresh_token(refresh_token, db)
 
@@ -271,7 +270,7 @@ class PostServiceV1:
 
     @staticmethod
     def get_post_image(
-        user: User, post_id: UUID, image_url: str, refresh_token: RefreshToken, db: Session
+        user: User, post_id: UUID, image_url: str, refresh_token: str, db: Session
     ):
         _ = validate_refresh_token(refresh_token, db)
 
@@ -304,7 +303,7 @@ class PostServiceV1:
 
     @staticmethod
     def get_post_comment(
-        post_id: UUID, comment_id: UUID, refresh_token: RefreshToken, db: Session
+        post_id: UUID, comment_id: UUID, refresh_token: str, db: Session
     ) -> CommentReadV1:
         _ = validate_refresh_token(refresh_token, db)
 
@@ -341,7 +340,7 @@ class PostServiceV1:
 
     @staticmethod
     def create_post(
-        post_create: PostCreateV1, user: User, refresh_token: RefreshToken, db: Session
+        post_create: PostCreateV1, user: User, refresh_token: str, db: Session
     ) -> PostReadV1:
         _ = validate_refresh_token(refresh_token, db)
 
@@ -372,7 +371,7 @@ class PostServiceV1:
         post_id: UUID,
         comment_create: CommentCreateV1,
         user: User,
-        refresh_token: RefreshToken,
+        refresh_token: str,
         db: Session,
     ) -> CommentReadV1:
         _ = validate_refresh_token(refresh_token, db)
@@ -413,7 +412,7 @@ class PostServiceV1:
             user: User,
             post_id: UUID,
             image_uploads: UploadFile,
-            refresh_token: RefreshToken,
+            refresh_token: str,
             db: Session,
         ):
             _ = validate_refresh_token(refresh_token, db)
@@ -474,7 +473,7 @@ class PostServiceV1:
                 raise ServerError() from e
 
     @staticmethod
-    def like_post(user: User, post_id: UUID, refresh_token: RefreshToken, db: Session):
+    def like_post(user: User, post_id: UUID, refresh_token: str, db: Session):
         _ = validate_refresh_token(refresh_token, db)
 
         # prevents double likes from increasing post likes count
@@ -507,7 +506,7 @@ class PostServiceV1:
         user: User,
         post_id: UUID,
         comment_id: UUID,
-        refresh_token: RefreshToken,
+        refresh_token: str,
         db: Session,
     ):
         _ = validate_refresh_token(refresh_token, db)
@@ -544,7 +543,7 @@ class PostServiceV1:
         user: User,
         post_id: UUID,
         post_update: PostUpdateV1,
-        refresh_token: RefreshToken,
+        refresh_token: str,
         db: Session,
     ):
         _ = validate_refresh_token(refresh_token, db)
@@ -585,7 +584,7 @@ class PostServiceV1:
 
     @staticmethod
     def unlike_post(
-        user: User, post_id: UUID, refresh_token: RefreshToken, db: Session
+        user: User, post_id: UUID, refresh_token: str, db: Session
     ):
         _ = validate_refresh_token(refresh_token, db)
         like: Like | None = post_repo_v1.get_like(user.id, post_id, db)
@@ -618,7 +617,7 @@ class PostServiceV1:
         user: User,
         post_id: UUID,
         comment_id: UUID,
-        refresh_token: RefreshToken,
+        refresh_token: str,
         db: Session,
     ):
         _ = validate_refresh_token(refresh_token, db)
@@ -660,7 +659,7 @@ class PostServiceV1:
 
     @staticmethod
     def delete_post(
-        post_id: UUID, user: User, refresh_token: RefreshToken, db: Session
+        post_id: UUID, user: User, refresh_token: str, db: Session
     ):
         _ = validate_refresh_token(refresh_token, db)
 
@@ -691,7 +690,7 @@ class PostServiceV1:
 
     @staticmethod
     def delete_comment(
-        comment_id: UUID, user: User, refresh_token: RefreshToken, db: Session
+        comment_id: UUID, user: User, refresh_token: str, db: Session
     ):
         _ = validate_refresh_token(refresh_token, db)
 

@@ -14,10 +14,11 @@ from app.api.v1.schemas.posts import (
     CommentResponseV1,
 )
 from app.api.v1.schemas.users import (
-    UserResponseV1,
+    UserReadV1,
     UserUpdateV1,
-    UserProfileResponseV1,
     UserProfileV1,
+    UserResponseV1,
+    UserProfileResponseV1,
 )
 
 
@@ -45,7 +46,7 @@ async def get_users(
     db: Session = Depends(get_db),
 ):
     refresh_token: str | None = request.cookies.get('refresh_token')
-    users: list[User] = user_service_v1.get_users(
+    users: list[UserReadV1] = user_service_v1.get_users(
         db, refresh_token, nationality, year, sort, order, offset, limit
     )
     return UserResponseV1(message='Users retrieved successfully', data=users)
@@ -73,7 +74,7 @@ async def search_users(
     db: Session = Depends(get_db),
 ):
     refresh_token: str | None = request.cookies.get('refresh_token')
-    users: list[User] = user_service_v1.search_users(
+    users: list[UserReadV1] = user_service_v1.search_users(
         db, refresh_token, q, nationality, year, sort, order, offset, limit
     )
     return UserResponseV1(message='Searched users retrieved successfully', data=users)

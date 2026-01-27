@@ -1,6 +1,5 @@
 from app.dependencies import get_db
 from app.core.config import settings
-from app.core.exceptions import ServerError
 from app.api.v1.services.auth_service import user_service_v1
 from app.api.v1.services.auth_service import auth_service_v1
 from app.api.v1.schemas.users import UserCreateV1, RoleCreateV1

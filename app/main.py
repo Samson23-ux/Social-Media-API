@@ -6,6 +6,8 @@ from sentry_sdk import logger as sentry_logger
 
 from app.core.config import settings
 from app.api.v1.routers.auth import auth_router_v1
+from app.api.v1.routers.posts import post_router_v1
+from app.api.v1.routers.admin import admin_router_v1
 from app.api.v1.routers.users import users_router_v1
 
 sentry_sdk.init(
@@ -39,9 +41,10 @@ app = FastAPI(
 
 from app.core import exception_handlers
 
+app.include_router(admin_router_v1, prefix=settings.API_VERSION_PREFIX, tags=['Admin'])
 app.include_router(auth_router_v1, prefix=settings.API_VERSION_PREFIX, tags=['Auth'])
 app.include_router(users_router_v1, prefix=settings.API_VERSION_PREFIX, tags=['Users'])
-app.include_router(users_router_v1, prefix=settings.API_VERSION_PREFIX, tags=['Posts'])
+app.include_router(post_router_v1, prefix=settings.API_VERSION_PREFIX, tags=['Posts'])
 
 
 # check api health status

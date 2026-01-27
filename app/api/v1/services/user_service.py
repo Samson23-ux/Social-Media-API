@@ -10,7 +10,6 @@ from app.utils import write_file
 from app.models.posts import Post
 from app.core.config import settings
 from app.models.users import User, Role
-from app.models.auth import RefreshToken
 from app.api.v1.schemas.images import ImageReadV1
 from app.models.images import Image, ProfileImage
 from app.core.security import validate_refresh_token
@@ -45,23 +44,29 @@ class UserServiceV1:
     @staticmethod
     def get_users(
         db: Session,
-        refresh_token: RefreshToken,
+        refresh_token: str,
         nationality: str | None = None,
         year: int | None = None,
         sort: str | None = None,
         order: str | None = None,
         offset: int = 0,
         limit: int = 10,
-    ) -> list[User]:
+    ) -> list[UserReadV1]:
         _ = validate_refresh_token(refresh_token, db)
 
         try:
-            users = user_repo_v1.get_users(
+            users_db: list[User]  = user_repo_v1.get_users(
                 db, nationality, year, sort, order, offset, limit
             )
-            if not users:
+            if not users_db:
                 sentry_logger.error('Users not found in database')
                 raise UsersNotFoundError()
+
+            users: list[UserReadV1] = []
+            for user in users_db:
+                user_read = UserReadV1.model_validate(user)
+                users.append(user_read)
+
             sentry_logger.info('Users retrieved from database successfully')
             return users
         except Exception as e:
@@ -76,7 +81,7 @@ class UserServiceV1:
     @staticmethod
     def search_users(
         db: Session,
-        refresh_token: RefreshToken,
+        refresh_token: str,
         q: str,
         nationality: str | None = None,
         year: int | None = None,
@@ -84,16 +89,22 @@ class UserServiceV1:
         order: str | None = None,
         offset: int = 0,
         limit: int = 10,
-    ) -> list[User]:
+    ) -> list[UserReadV1]:
         _ = validate_refresh_token(refresh_token, db)
 
         try:
-            users = user_repo_v1.search_users(
+            users_db: list[User] = user_repo_v1.search_users(
                 db, q, nationality, year, sort, order, offset, limit
             )
-            if not users:
+            if not users_db:
                 sentry_logger.error('Searched users not found in database')
                 raise UsersNotFoundError()
+
+            users: list[UserReadV1] = []
+            for user in users_db:
+                user_read = UserReadV1.model_validate(user)
+                users.append(user_read)
+
             sentry_logger.info('Searched users retrieved from database successfully')
             return users
         except Exception as e:
@@ -135,7 +146,7 @@ class UserServiceV1:
 
     @staticmethod
     def get_user_by_username(
-        username: str, db: Session, refresh_token: RefreshToken = None
+        username: str, db: Session, refresh_token: str = None
     ) -> User:
         if refresh_token:
             _ = validate_refresh_token(refresh_token, db)
@@ -150,7 +161,7 @@ class UserServiceV1:
 
     @staticmethod
     def get_user_profile(
-        username: str, refresh_token: RefreshToken, db: Session
+        username: str, refresh_token: str, db: Session
     ) -> UserProfileV1:
         '''get other user profile with username
         the age of the owner's profile is not visible to public'''
@@ -175,7 +186,7 @@ class UserServiceV1:
 
     @staticmethod
     def get_current_user_profile(
-        user: User, refresh_token: RefreshToken, db: Session
+        user: User, refresh_token: str, db: Session
     ) -> CurrentUserProfileV1:
         '''get current user profile with username and age'''
         _ = validate_refresh_token(refresh_token, db)
@@ -194,13 +205,13 @@ class UserServiceV1:
         return user_profile
 
     @staticmethod
-    def get_role(role_name: Role, db: Session) -> Role:
+    def get_role(role_name: str, db: Session) -> Role:
         role = user_repo_v1.get_role(role_name, db)
         return role
 
     @staticmethod
     def get_followers(
-        current_user: User, username: str, refresh_token: RefreshToken, db: Session
+        current_user: User, username: str, refresh_token: str, db: Session
     ):
         _ = validate_refresh_token(refresh_token, db)
 
@@ -248,7 +259,7 @@ class UserServiceV1:
 
     @staticmethod
     def get_followings(
-        current_user: User, username: str, refresh_token: RefreshToken, db: Session
+        current_user: User, username: str, refresh_token: str, db: Session
     ):
         _ = validate_refresh_token(refresh_token, db)
 
@@ -395,7 +406,7 @@ class UserServiceV1:
     def get_liked_post(
         current_user: User,
         username: str,
-        refresh_token: RefreshToken,
+        refresh_token: str,
         db: Session,
         offset: int = 0,
         limit: int = 10,
@@ -474,7 +485,7 @@ class UserServiceV1:
     def get_user_comments(
         current_user: User,
         username: str,
-        refresh_token: RefreshToken,
+        refresh_token: str,
         db: Session,
         created_at: int | None = None,
         sort: str | None = None,
@@ -544,7 +555,7 @@ class UserServiceV1:
     async def get_user_avatar(
         current_user: User,
         username: User,
-        refresh_token: RefreshToken,
+        refresh_token: str,
         image_url: str,
         db: Session,
     ):
@@ -602,7 +613,7 @@ class UserServiceV1:
 
     @staticmethod
     def follow_user(
-        current_user: User, username: str, refresh_token: RefreshToken, db: Session
+        current_user: User, username: str, refresh_token: str, db: Session
     ):
         _ = validate_refresh_token(refresh_token, db)
 
@@ -668,7 +679,7 @@ class UserServiceV1:
 
     @staticmethod
     async def upload_image(
-        refresh_token: RefreshToken,
+        refresh_token: str,
         user: User,
         image_uploads: list[UploadFile],
         db: Session,
@@ -772,7 +783,7 @@ class UserServiceV1:
 
     @staticmethod
     def unfollow_user(
-        current_user: User, username: str, refresh_token: RefreshToken, db: Session
+        current_user: User, username: str, refresh_token: str, db: Session
     ):
         _ = validate_refresh_token(refresh_token, db)
 
