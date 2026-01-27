@@ -1,4 +1,3 @@
-import enum
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 from sqlalchemy.dialects.postgresql import TSVECTOR
@@ -13,16 +12,10 @@ from sqlalchemy import (
     UUID,
     Computed,
     Index,
-    Integer,
 )
 
 from app.database.base import Base
-
-
-class VisibilityEnum(str, enum.Enum):
-    PUBLIC: str = 'public'
-    FOLLOWERS: str = 'followers'
-    PRIVATE: str = 'private'
+from app.api.v1.schemas.posts import VisibilityEnum
 
 
 class Post(Base):
@@ -107,11 +100,42 @@ class Comment(Base):
     user_id = Column(
         UUID, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True
     )
-    likes = Column(Integer, default=0, nullable=False)
     content = Column(Text, nullable=False)
     created_at = Column(
-        DateTime(timezone=True), default=datetime.now(timezone.utc), nullable=False
+        DateTime(timezone=True),
+        default=datetime.now(timezone.utc),
+        nullable=False,
+        index=True,
     )
 
     user = relationship('User', back_populates='comments')
     post = relationship('Post', back_populates='comments')
+    comment_likes = relationship(
+        'CommentLike',
+        passive_deletes=True,
+        cascade='all, delete-orphan',
+        single_parent=True,
+        back_populates='comment',
+    )
+
+
+class CommentLike(Base):
+    __tablename__ = 'comment_likes'
+
+    user_id = Column(
+        UUID,
+        ForeignKey('users.id', ondelete='CASCADE'),
+        primary_key=True,
+    )
+    comment_id = Column(
+        UUID,
+        ForeignKey('comments.id', ondelete='CASCADE'),
+        primary_key=True,
+        index=True,
+    )
+    liked_at = Column(
+        DateTime(timezone=True), default=datetime.now(timezone.utc), nullable=False
+    )
+
+    user = relationship('User', back_populates='comment_likes', viewonly=True)
+    comment = relationship('Comment', back_populates='comment_likes', viewonly=True)

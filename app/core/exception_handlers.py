@@ -7,19 +7,23 @@ from app.core.exceptions import (
     ServerError,
     UsernameError,
     PasswordError,
-    PostsNotFound,
     CredentialError,
     RoleExistsError,
     UserExistsError,
-    CommentsNotFound,
+    ImageUploadError,
     UserNotFoundError,
-    ProfileImageError,
+    PostNotFoundError,
     UsersNotFoundError,
     AuthorizationError,
+    PostsNotFoundError,
+    PostVisibilityError,
     AuthenticationError,
     AvatarNotFoundError,
+    CommentNotFoundError,
+    CommentsNotFoundError,
     FollowingNotFoundError,
     FollowersNotFoundError,
+    PostImageNotFoundError,
     ProfileImageExistsError,
 )
 
@@ -141,11 +145,11 @@ app.add_exception_handler(
 
 
 app.add_exception_handler(
-    exc_class_or_status_code=ProfileImageError,
+    exc_class_or_status_code=ImageUploadError,
     handler=create_exception_handler(
         status_code=400,
         initial_detail={
-            'error_code': 'Profile images are complete',
+            'error_code': 'Image upload error',
             'message': f'A minimum of {min_profile_image} and maximum of {max_profile_image} are allowed',
             'timestamp': error_time,
         },
@@ -231,7 +235,7 @@ app.add_exception_handler(
 )
 
 app.add_exception_handler(
-    exc_class_or_status_code=CommentsNotFound,
+    exc_class_or_status_code=CommentsNotFoundError,
     handler=create_exception_handler(
         status_code=404,
         initial_detail={
@@ -243,12 +247,63 @@ app.add_exception_handler(
 )
 
 app.add_exception_handler(
-    exc_class_or_status_code=PostsNotFound,
+    exc_class_or_status_code=CommentNotFoundError,
+    handler=create_exception_handler(
+        status_code=404,
+        initial_detail={
+            'error_code': 'Comment not found',
+            'message': 'No comment found with the provided id',
+            'resolution': 'Confirm that the sent id matches the comment id',
+            'timestamp': error_time,
+        },
+    ),
+)
+
+app.add_exception_handler(
+    exc_class_or_status_code=PostsNotFoundError,
     handler=create_exception_handler(
         status_code=404,
         initial_detail={
             'error_code': 'Posts not found',
             'message': 'No Posts found at the moment',
+            'timestamp': error_time,
+        },
+    ),
+)
+
+app.add_exception_handler(
+    exc_class_or_status_code=PostNotFoundError,
+    handler=create_exception_handler(
+        status_code=404,
+        initial_detail={
+            'error_code': 'Post not found',
+            'message': 'No Post found with the provided id',
+            'resolution': 'Confirm that the sent id matches the post id',
+            'timestamp': error_time,
+        },
+    ),
+)
+
+app.add_exception_handler(
+    exc_class_or_status_code=PostVisibilityError,
+    handler=create_exception_handler(
+        status_code=400,
+        initial_detail={
+            'error_code': 'Invalid post visibility provided',
+            'message': 'Post visibility can either be public, followers or private',
+            'timestamp': error_time,
+        },
+    ),
+)
+
+app.add_exception_handler(
+    exc_class_or_status_code=PostImageNotFoundError,
+    handler=create_exception_handler(
+        status_code=404,
+        initial_detail={
+            'error_code': 'Post image not found',
+            'message': 'No post image found for the provided url',
+            'resolution': 'Ensure the provided image url is correct',
             'timestamp': error_time,
         },
     ),

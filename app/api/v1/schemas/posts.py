@@ -2,7 +2,9 @@ import enum
 from uuid import UUID
 from typing import Optional
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
+
+from app.core.exceptions import PostVisibilityError
 
 
 class VisibilityEnum(str, enum.Enum):
@@ -22,6 +24,21 @@ class PostBaseV1(BaseModel):
     visibility: str = VisibilityEnum.PUBLIC
 
 
+    @field_validator('visibility', mode='after')
+    @classmethod
+    def get_visibility_enum(cls, v: str):
+        visibility = None
+        if v.lower() == VisibilityEnum.PUBLIC.value:
+            visibility = VisibilityEnum.PUBLIC
+        elif v.lower() == VisibilityEnum.FOLLOWERS.value:
+            visibility = VisibilityEnum.FOLLOWERS
+        elif v.lower() == VisibilityEnum.PRIVATE.value:
+            visibility = VisibilityEnum.PRIVATE
+        else:
+            raise PostVisibilityError()
+        return visibility
+
+
 class CommentBaseV1(BaseModel):
     content: str
 
@@ -36,6 +53,13 @@ class PostCreateV1(PostBaseV1):
     pass
 
     model_config = ConfigDict(str_strip_whitespace=True, extra='forbid', strict=True)
+
+
+class PostUpdateV1(BaseModel):
+    title: Optional[str] = None
+    content: Optional[str] = None
+    visibility: Optional[str] = VisibilityEnum.PUBLIC
+    content: Optional[str] = None
 
 
 class PostReadBaseV1(PostBaseV1):
@@ -55,8 +79,8 @@ class CommentReadBaseV1(CommentBaseV1):
 class PostReadV1(PostReadBaseV1):
     display_name: str
     username: str
-    likes: int
-    comments: int
+    likes: int = 0
+    comments: int = 0
 
 
 class CommentReadV1(CommentReadBaseV1):

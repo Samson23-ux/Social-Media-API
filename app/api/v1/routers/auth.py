@@ -127,23 +127,35 @@ async def reset_password(
 
 
 @auth_router_v1.patch(
-    '/auth/restore-account/',
+    '/auth/account/reactivate/',
     status_code=200,
     response_model=UserResponseV1,
-    description='Restore account after temporary deletion before 30 days',
+    description='Reactivate account after temporary deletion before 30 days',
 )
-async def restore_account(
+async def reactivate_account(
     email: str = Form(...),
     account_password: str = Form(...),
     db: Session = Depends(get_db),
 ):
-    user = auth_service_v1.restore_account(email, account_password, db)
-    return UserResponseV1(message='Account restored successfully', data=user)
+    user = auth_service_v1.reactivate_account(email, account_password, db)
+    return UserResponseV1(message='User account reactivated successfully', data=user)
 
 
-@auth_router_v1.delete(
-    '/auth/delete-account/', status_code=200, description='Delete account temporarily'
+@auth_router_v1.patch(
+    '/auth/account/deactivate/', status_code=200, description='Deactivate account'
 )
+async def deactivate_account(
+    request: Request,
+    password: str = Form(),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    refresh_token = request.cookies.get('refresh_token')
+    auth_service_v1.deactivate_account(refresh_token, password, user, db)
+    return UserResponseV1(message='User account deactivated successfully')
+
+
+@auth_router_v1.delete('/auth/account/delete/', status_code=204, description='Delete account permanently')
 async def delete_account(
     request: Request,
     password: str = Form(),
@@ -151,5 +163,4 @@ async def delete_account(
     db: Session = Depends(get_db),
 ):
     refresh_token = request.cookies.get('refresh_token')
-    auth_service_v1.delete_account(refresh_token, password, user, db)
-    return UserResponseV1(message='User account deleted successfully')
+    auth_service_v1.delete_user_account(refresh_token, password, user, db)

@@ -1,4 +1,3 @@
-import enum
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone, date
 from sqlalchemy import (
@@ -17,11 +16,7 @@ from sqlalchemy import (
 )
 
 from app.database.base import Base
-
-
-class UserRole(str, enum.Enum):
-    USER: str = 'user'
-    ADMIN: str = 'admin'
+from app.api.v1.schemas.users import UserRole
 
 
 follows = Table(
@@ -56,6 +51,7 @@ class User(Base):
         UUID, ForeignKey('roles.id', ondelete='RESTRICT'), nullable=False, index=True
     )
     bio = Column(Text)
+    is_suspended = Column(Boolean, default=False, nullable=False)
     is_delete = Column(Boolean, default=False, nullable=False)
     created_at = Column(
         DateTime(timezone=True),
@@ -63,6 +59,7 @@ class User(Base):
         nullable=False,
         index=True,
     )
+    suspended_at = Column(DateTime(timezone=True))
     deleted_at = Column(DateTime(timezone=True))
     delete_at = Column(DateTime(timezone=True))
 
@@ -95,6 +92,14 @@ class User(Base):
     )
 
     comments = relationship('Comment', back_populates='user', viewonly=True)
+
+    comment_likes = relationship(
+        'CommentLike',
+        passive_deletes=True,
+        cascade='all, delete-orphan',
+        single_parent=True,
+        back_populates='user',
+    )
 
     likes = relationship('Like', back_populates='user', viewonly=True)
 

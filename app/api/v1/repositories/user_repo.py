@@ -2,12 +2,12 @@ from uuid import UUID
 from typing import Any
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
-from sqlalchemy import select, delete, and_, func, desc, or_
+from sqlalchemy import select, delete, and_, func, desc, or_, case
 
 from app.models.users import User, Role
-from app.models.posts import Post, Like, Comment
 from app.models.images import Image, ProfileImage
 from app.api.v1.schemas.posts import VisibilityEnum
+from app.models.posts import Post, Like, Comment, CommentLike
 
 
 class UserRepoV1:
@@ -33,7 +33,7 @@ class UserRepoV1:
         }
         stmt = select(User)
 
-        stmt = stmt.where(User.is_delete.is_(False))
+        stmt = stmt.where(and_(User.is_delete.is_(False), User.is_suspended.is_(False)))
 
         if nationality:
             stmt = stmt.where(func.lower(User.nationality) == func.lower(nationality))
@@ -75,10 +75,12 @@ class UserRepoV1:
         }
         stmt = select(User)
 
+        # pg_trgms is used to search for users
         stmt = stmt.where(
             and_(
                 or_(User.display_name.ilike(q), User.username.ilike(q)),
-                User.is_created.is_(False),
+                User.is_delete.is_(False),
+                User.is_suspended.is_(False),
             )
         )
 
@@ -109,21 +111,37 @@ class UserRepoV1:
 
     @staticmethod
     def get_user_by_id(user_id: UUID, db: Session) -> User | None:
-        stmt = select(User).where(and_(User.id == user_id, User.is_delete.is_(False)))
+        stmt = select(User).where(
+            and_(
+                User.id == user_id,
+                User.is_delete.is_(False),
+                User.is_suspended.is_(False),
+            )
+        )
         user: User | None = db.execute(stmt).scalar()
         return user
 
     @staticmethod
     def get_user_by_username(username: str, db: Session) -> User | None:
         stmt = select(User).where(
-            and_(User.username == username, User.is_delete.is_(False))
+            and_(
+                User.username == username,
+                User.is_delete.is_(False),
+                User.is_suspended.is_(False),
+            )
         )
         user: User | None = db.execute(stmt).scalar()
         return user
 
     @staticmethod
     def get_user_by_email(email: str, db: Session) -> User | None:
-        stmt = select(User).where(and_(User.email == email, User.is_delete.is_(False)))
+        stmt = select(User).where(
+            and_(
+                User.email == email,
+                User.is_delete.is_(False),
+                User.is_suspended.is_(False),
+            )
+        )
         user: User | None = db.execute(stmt).scalar()
         return user
 
@@ -148,7 +166,7 @@ class UserRepoV1:
         order: str | None = None,
         offset: int = 0,
         limit: int = 10,
-    ) -> list | None:
+    ) -> list:
         '''select current user's posts and handle sorting by likes and comments'''
 
         sortable_fields: list[str] = ['created_at', 'likes', 'comments']
@@ -173,12 +191,19 @@ class UserRepoV1:
         by post then using the window function count to get the total
         likes/comments'''
         stmt = (
+            # posts with zero comments or likes are set to 0
             stmt.select(
-                func.count(Comment.user_id).label('comments'),
-                func.count(Like.user_id).label('likes'),
+                case(
+                    (Comment.post_id.is_(None), 0),
+                    else_=func.count(User.id),
+                ).label('comments'),
+                case(
+                    (Like.post_id.is_(None), 0),
+                    else_=func.count(User.id),
+                ).label('likes'),
             )
-            .join(Post, Post.id == Comment.post_id)
-            .join(Post, Post.id == Like.post_id)
+            .outerjoin(Post, Post.id == Comment.post_id)
+            .outerjoin(Post, Post.id == Like.post_id)
             .group_by(Comment.post_id)
         )
 
@@ -199,7 +224,7 @@ class UserRepoV1:
                 stmt = stmt.order_by('comments')
 
         stmt = stmt.offset(offset).limit(limit)
-        user_posts: list | None = db.execute(stmt).all()
+        user_posts: list = db.execute(stmt).all()
         return user_posts
 
     @staticmethod
@@ -213,7 +238,7 @@ class UserRepoV1:
         order: str | None = None,
         offset: int = 0,
         limit: int = 10,
-    ):
+    ) -> list:
         '''since the request is to get another user's posts
         an additional check is required to only get posts
         whose visibility is set to followers if the current
@@ -263,12 +288,19 @@ class UserRepoV1:
             stmt = stmt.where(Post.created_at.year == created_at)
 
         stmt = (
+            # posts with zero comments or likes are set to 0
             stmt.select(
-                func.count(Comment.user_id).label('comments'),
-                func.count(Like.user_id).label('likes'),
+                case(
+                    (Comment.post_id.is_(None), 0),
+                    else_=func.count(Comment.user_id),
+                ).label('comments'),
+                case(
+                    (Like.post_id.is_(None), 0),
+                    else_=func.count(Comment.user_id),
+                ).label('likes'),
             )
-            .join(Post, Post.id == Comment.post_id)
-            .join(Post, Post.id == Like.post_id)
+            .outerjoin(Post, Post.id == Comment.post_id)
+            .outerjoin(Post, Post.id == Like.post_id)
             .group_by(Comment.post_id)
         )
 
@@ -289,12 +321,60 @@ class UserRepoV1:
                 stmt = stmt.order_by('comments')
 
         stmt = stmt.offset(offset).limit(limit)
-        user_posts: list | None = db.execute(stmt).all()
+        user_posts: list = db.execute(stmt).all()
         return user_posts
 
     @staticmethod
-    def get_user_comments(user: User) -> list[Comment] | None:
-        return user.comments
+    def get_user_comments(
+        user_id: UUID,
+        db: Session,
+        created_at: int | None = None,
+        sort: str | None = None,
+        order: str | None = None,
+        offset: int = 0,
+        limit: int = 10,
+    ) -> list:
+        sortable_fields: list = ['created_at', 'likes']
+        stmt = select(
+            Comment.id,
+            Comment.content,
+            User.display_name,
+            User.username,
+            Comment.created_at,
+        ).join(User, Comment.user_id == user_id)
+
+        if created_at:
+            stmt = stmt.where(Comment.created_at.year == created_at)
+
+        stmt = (
+            stmt.select(
+                case(
+                    (CommentLike.comment_id.is_(None), 0),
+                    else_=func.count(CommentLike.user_id),
+                ).label('likes')
+            )
+            .outerjoin(CommentLike, CommentLike.comment_id == Comment.id)
+            .group_by(CommentLike.comment_id)
+        )
+
+        if sort:
+            if sort not in sortable_fields or sort == 'created_at':
+                '''sort by created_at'''
+                if order == 'desc':
+                    stmt = stmt.order_by(desc(Comment.created_at))
+                else:
+                    stmt = stmt.order_by(Comment.created_at)
+            else:
+                '''sort by likes'''
+                if order == 'desc':
+                    stmt = stmt.order_by(desc('likes'))
+                else:
+                    stmt = stmt.order_by('likes')
+
+        stmt = stmt.offset(offset).limit(limit)
+
+        comments: list = db.execute(stmt).all()
+        return comments
 
     @staticmethod
     def get_liked_posts(
@@ -319,7 +399,7 @@ class UserRepoV1:
             .limit(limit)
         )
 
-        liked_posts = db.execute(stmt).all()
+        liked_posts: list = db.execute(stmt).all()
         return liked_posts
 
     @staticmethod
@@ -379,7 +459,13 @@ class UserRepoV1:
         db.refresh(user)
 
     @staticmethod
+    def delete_user_account(user: User, db: Session):
+        db.delete(user)
+        db.flush()
+
+    @staticmethod
     def delete_user(db: Session):
+        '''delete user accounts from database after 30 days of deactivating'''
         stmt = (
             delete(User)
             .where(datetime.now(timezone.utc) >= User.delete_at)

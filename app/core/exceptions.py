@@ -54,7 +54,7 @@ class RoleExistsError(AppException):
 
     pass
 
-class ProfileImageError(AppException):
+class ImageUploadError(AppException):
     '''Min and Max file not met'''
 
     pass
@@ -84,13 +84,33 @@ class UsernameError(AppException):
 
     pass
 
-class CommentsNotFound(AppException):
+class CommentsNotFoundError(AppException):
     '''comments not found'''
 
     pass
 
-class PostsNotFound(AppException):
+class CommentNotFoundError(AppException):
+    '''comment not found'''
+
+    pass
+
+class PostsNotFoundError(AppException):
     '''posts not found'''
+
+    pass
+
+class PostNotFoundError(AppException):
+    '''post not found'''
+
+    pass
+
+class PostVisibilityError(AppException):
+    '''incorrect visibility provided'''
+
+    pass
+
+class PostImageNotFoundError(AppException):
+    '''post image not found'''
 
     pass
 

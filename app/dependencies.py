@@ -7,6 +7,7 @@ from fastapi.security import OAuth2PasswordBearer
 from app.models.users import User
 from app.core.config import settings
 from app.core.security import decode_token
+from app.api.v1.schemas.users import UserRole
 from app.database.session import SessionLocal
 from app.api.v1.services.user_service import user_service_v1
 
@@ -36,7 +37,7 @@ async def get_current_user(
     return user
 
 
-def required_roles(roles: list[str]):
+def required_roles(roles: list[UserRole]):
     def role_checker(user: User = Depends(get_current_user)):
         if user.role not in roles:
             sentry_logger.error('User not permitted')

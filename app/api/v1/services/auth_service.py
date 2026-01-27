@@ -302,7 +302,7 @@ class AuthServiceV1:
         return user
 
     @staticmethod
-    def restore_account(email: str, account_password, db: Session) -> User:
+    def reactivate_account(email: str, account_password, db: Session) -> User:
         user = user_repo_v1.get_deleted_user(email, db)
 
         if not user:
@@ -334,7 +334,7 @@ class AuthServiceV1:
         return user
 
     @staticmethod
-    def delete_account(refresh_token: str, password: str, user: User, db: Session):
+    def deactivate_account(refresh_token: str, password: str, user: User, db: Session):
         '''deactivates user account'''
         # check if refresh token is valid
         refresh_token_db: RefreshToken = validate_refresh_token(refresh_token, db)
@@ -373,6 +373,43 @@ class AuthServiceV1:
             sentry_sdk.capture_exception(e)
             sentry_logger.error(
                 'Internal server error while deactivating user {id} account', id=user.id
+            )
+            raise ServerError() from e
+
+    @staticmethod
+    def delete_user_account(refresh_token: str, password: str, user: User, db: Session):
+        refresh_token_db = validate_refresh_token(refresh_token, db)
+
+        AuthServiceV1.revoke_refresh_token(refresh_token_db)
+
+        try:
+            auth_repo_v1.store_refresh_token(refresh_token_db, db)
+            db.commit()
+            sentry_logger.info(
+                'Refresh token {id} status updated', id=refresh_token_db.id
+            )
+        except Exception as e:
+            db.rollback()
+            sentry_sdk.capture_exception(e)
+            sentry_logger.error(
+                'Internal server error while updating refresh token {id}',
+                id=refresh_token_db.id,
+            )
+            raise ServerError() from e
+
+        if not verify_password(password, user.hash_password):
+            sentry_logger.error('Incorrect password')
+            raise PasswordError()
+
+        try:
+            user_repo_v1.delete_user_account(user, db)
+            db.commit()
+            sentry_logger.info('User {id} account deleted permanently', id=user.id)
+        except Exception as e:
+            db.rollback()
+            sentry_sdk.capture_exception(e)
+            sentry_logger.error(
+                'Internal server error while deleting user {id} account', id=user.id
             )
             raise ServerError() from e
 

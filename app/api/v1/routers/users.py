@@ -38,7 +38,7 @@ async def get_users(
         default=None,
         description='Sort users by username, display_name, nationality, created_at',
     ),
-    order: str = Query(default=None, description='sort in asc or desc order'),
+    order: str = Query(default=None, description='Sort in asc or desc order'),
     offset: int = Query(default=0),
     limit: int = Query(default=10),
     _=Depends(get_current_user),
@@ -59,14 +59,14 @@ async def get_users(
 )
 async def search_users(
     request: Request,
-    q: str = Query(..., description='search users by username or display_name'),
+    q: str = Query(..., description='Search users by username or display_name'),
     nationality: str = Query(default=None, description='Filter by nationality'),
     year: int = Query(default=None, description='Filter by year joined'),
     sort: str = Query(
         default=None,
         description='Sort users by username, display_name, nationality, created_at',
     ),
-    order: str = Query(default=None, description='sort in asc or desc order'),
+    order: str = Query(default=None, description='Sort in asc or desc order'),
     offset: int = Query(default=0),
     limit: int = Query(default=10),
     _=Depends(get_current_user),
@@ -93,7 +93,7 @@ async def get_user_posts(
         default=None,
         description='Sort posts by likes, comments, created_at',
     ),
-    order: str = Query(default=None, description='sort in asc or desc order'),
+    order: str = Query(default=None, description='Sort in asc or desc order'),
     offset: int = Query(default=0),
     limit: int = Query(default=10),
     user: User = Depends(get_current_user),
@@ -194,12 +194,20 @@ async def get_followings(
 async def get_user_comments(
     username: str,
     request: Request,
+    created_at: int = Query(default=None, description='Filter by year created'),
+    sort: str = Query(
+        default=None,
+        description='Sort comments by likes and created_at',
+    ),
+    order: str = Query(default=None, description='Sort in asc or desc order'),
+    offset: int = Query(default=0),
+    limit: int = Query(default=10),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     refresh_token: str | None = request.cookies.get('refresh_token')
     comments: list[CommentReadV1] = user_service_v1.get_user_comments(
-        user, username, refresh_token, db
+        user, username, refresh_token, db, created_at, sort, order, offset, limit
     )
     return CommentResponseV1(
         message='User comments retrieved successfully', data=comments
@@ -215,10 +223,10 @@ async def get_user_comments(
 async def get_liked_posts(
     username: str,
     request: Request,
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
     offset: int = Query(default=0),
     limit: int = Query(default=10),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     refresh_token: str | None = request.cookies.get('refresh_token')
     posts: list[PostReadV1] = user_service_v1.get_liked_post(
@@ -272,7 +280,9 @@ async def follow_user(
 )
 async def upload_image(
     request: Request,
-    images: list[UploadFile] = File(...),
+    images: list[UploadFile] = File(
+        ..., description='Upload at least 0 and at most 2 avatar'
+    ),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):

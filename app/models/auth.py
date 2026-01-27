@@ -1,16 +1,9 @@
-import enum
 from datetime import datetime, timezone
 from sqlalchemy.orm import relationship
 from sqlalchemy import Column, UUID, Text, ForeignKey, Enum, DateTime
 
 from app.database.base import Base
-
-
-class TokenStatus(str, enum.Enum):
-    VALID: str = 'valid'
-    REVOKED: str = 'revoked'
-    USED: str = 'used'
-
+from app.api.v1.schemas.auth import TokenStatus
 
 class RefreshToken(Base):
     __tablename__ = 'refresh_tokens'
