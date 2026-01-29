@@ -108,7 +108,7 @@ async def get_post_by_id(
 @post_router_v1.get(
     '/posts/{post_id}/images/{image_url}/',
     status_code=200,
-    response_model=FileResponse,
+    response_class=FileResponse,
     description='Get post image',
 )
 async def get_post_image(
@@ -344,3 +344,19 @@ async def delete_comment(
 ):
     refresh_token: str | None = request.cookies.get('refresh_token')
     post_service_v1.delete_comment(comment_id, refresh_token, db)
+
+
+@post_router_v1.delete(
+    '/posts{post_id}/images/{image_url}/',
+    status_code=204,
+    description='Delete post image'
+)
+async def delete_post_image(
+    post_id: UUID,
+    image_url: str,
+    request: Request,
+    _ = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    refresh_token: str | None = request.cookies.get('refresh_token')
+    post_service_v1.delete_post_image(post_id, image_url, refresh_token, db)

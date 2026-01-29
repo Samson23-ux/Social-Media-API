@@ -230,6 +230,20 @@ class PostRepoV1:
         stmt = stmt.offset(offset).limit(limit)
         post_comments: list = db.execute(stmt).all()
         return post_comments
+    
+
+    @staticmethod
+    def get_post_image(
+        image_url: UUID, post_id: UUID, db: Session
+    ) -> PostImage | None:
+        stmt = (
+            select(PostImage)
+            .join(Image, PostImage.image_id == Image.id)
+            .where(and_(PostImage.post_id == post_id, Image.image_url == image_url))
+        )
+        post_image: PostImage | None = db.execute(stmt).scalar()
+        return post_image
+
 
     @staticmethod
     def add_post(post: Post, db: Session):
@@ -269,11 +283,6 @@ class PostRepoV1:
         db.refresh(comment)
 
     @staticmethod
-    def delete_post(post: Post, db: Session):
-        db.delete(post)
-        db.flush()
-
-    @staticmethod
     def unlike_post(post: Post, like: Like, db: Session):
         post.likes.remove(like)
         db.flush()
@@ -281,6 +290,16 @@ class PostRepoV1:
     @staticmethod
     def unlike_comment(comment: Comment, comment_like: CommentLike, db: Session):
         comment.comment_likes.remove(comment_like)
+        db.flush()
+
+    @staticmethod
+    def delete_post(post: Post, db: Session):
+        db.delete(post)
+        db.flush()
+
+    @staticmethod
+    def delete_post_image(post_image: PostImage, db: Session):
+        db.delete(post_image)
         db.flush()
 
     @staticmethod

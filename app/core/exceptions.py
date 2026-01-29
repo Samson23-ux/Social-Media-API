@@ -114,6 +114,9 @@ class PostImageNotFoundError(AppException):
 
     pass
 
+class InvalidImageError(AppException):
+    '''inavlid image uploaded'''
+
 
 
 

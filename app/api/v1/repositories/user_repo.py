@@ -13,6 +13,7 @@ from app.models.posts import Post, Like, Comment, CommentLike
 class UserRepoV1:
     @staticmethod
     def get_users(
+        user_id: UUID,
         db: Session,
         nationality: str | None = None,
         year: int | None = None,
@@ -33,7 +34,13 @@ class UserRepoV1:
         }
         stmt = select(User)
 
-        stmt = stmt.where(and_(User.is_delete.is_(False), User.is_suspended.is_(False)))
+        stmt = stmt.where(
+            and_(
+                User.is_delete.is_(False),
+                User.is_suspended.is_(False),
+                User.id != user_id,  # exclude current_user from the list of users
+            )
+        )
 
         if nationality:
             stmt = stmt.where(func.lower(User.nationality) == func.lower(nationality))
@@ -393,7 +400,7 @@ class UserRepoV1:
                 Post.visibility,
                 Post.created_at,
             )
-            .join(Like, user_id == Like.user_id)
+            .join(Like, Like.user_id == user_id)
             .join(Post, Post.id == Like.post_id)
             .offset(offset)
             .limit(limit)
@@ -403,24 +410,35 @@ class UserRepoV1:
         return liked_posts
 
     @staticmethod
-    def get_user_images(user: User) -> list[ProfileImage]:
+    def get_user_images(user: User) -> list:
         return user.profile_images
 
     @staticmethod
-    def get_user_avatar(image_url: str, user_id: UUID, db: Session) -> str:
+    def get_user_avatar(image_url: str, user_id: UUID, db: Session) -> str | None:
         stmt = (
             select(Image.image_url)
-            .join(User, user_id == ProfileImage.user_id)
-            .join(Image, Image.id == ProfileImage.image_id)
-            .where(Image.image_url == image_url)
+            .join(ProfileImage, Image.id == ProfileImage.image_id)
+            .where(and_(Image.image_url == image_url, ProfileImage.user_id == user_id))
         )
         return db.execute(stmt).scalar()
 
     @staticmethod
-    def get_image_id(image_url: str, db: Session) -> UUID:
+    def get_image_id(image_url: str, db: Session) -> UUID | None:
         stmt = select(Image.id).where(Image.image_url == image_url)
-        image_id: UUID = db.execute(stmt).scalar()
+        image_id: UUID | None = db.execute(stmt).scalar()
         return image_id
+
+    @staticmethod
+    def get_profile_image(
+        image_url: UUID, user_id: UUID, db: Session
+    ) -> ProfileImage | None:
+        stmt = (
+            select(ProfileImage)
+            .join(Image, ProfileImage.image_id == Image.id)
+            .where(and_(ProfileImage.user_id == user_id, Image.image_url == image_url))
+        )
+        profile_image: ProfileImage | None = db.execute(stmt).scalar()
+        return profile_image
 
     @staticmethod
     def add_user(user: User, db: Session):
@@ -461,6 +479,11 @@ class UserRepoV1:
     @staticmethod
     def delete_user_account(user: User, db: Session):
         db.delete(user)
+        db.flush()
+
+    @staticmethod
+    def delete_profile_image(profile_image: ProfileImage, db: Session):
+        db.delete(profile_image)
         db.flush()
 
     @staticmethod

@@ -1,21 +1,24 @@
-import Path
+import os
+from pathlib import Path
 import sentry_sdk
 from uuid import UUID
 from fastapi import UploadFile
 from sqlalchemy.orm import Session
 from sentry_sdk import logger as sentry_logger
 
-from app.utils import write_file
 from app.models.users import User
 from app.core.config import settings
 from app.core.exceptions import ServerError
 from app.api.v1.schemas.users import UserRole
 from app.models.images import Image, PostImage
+from app.utils import write_file, validate_image
 from app.api.v1.schemas.images import ImageReadV1
 from app.core.security import validate_refresh_token
 from app.api.v1.repositories.post_repo import post_repo_v1
 from app.models.posts import Post, Comment, Like, CommentLike
 from app.core.exceptions import (
+    ImageUploadError,
+    InvalidImageError,
     PostNotFoundError,
     PostsNotFoundError,
     AuthorizationError,
@@ -30,7 +33,6 @@ from app.api.v1.schemas.posts import (
     CommentReadV1,
     PostReadBaseV1,
     CommentCreateV1,
-    ImageUploadError,
     CommentReadBaseV1,
 )
 
@@ -237,9 +239,7 @@ class PostServiceV1:
             raise ServerError() from e
 
     @staticmethod
-    def get_post_by_id(
-        post_id: UUID, refresh_token: str, db: Session
-    ) -> PostReadV1:
+    def get_post_by_id(post_id: UUID, refresh_token: str, db: Session) -> PostReadV1:
         _ = validate_refresh_token(refresh_token, db)
 
         post_db: Post = post_repo_v1.get_post_by_id(post_id, db)
@@ -284,9 +284,11 @@ class PostServiceV1:
             image_db: Image = post_repo_v1.get_image(image_url, db)
 
             if not image_db:
-                sentry_logger.error('Post image not found for image url {url}', url=image_url)
+                sentry_logger.error(
+                    'Post image not found for image url {url}', url=image_url
+                )
                 raise PostImageNotFoundError()
-            
+
             image_path = Path(settings.PROFILE_IMAGE_PATH).resolve()
             image_url: str = f'{image_path}\\{image_url}'
             return image_url
@@ -407,70 +409,76 @@ class PostServiceV1:
             )
             raise ServerError() from e
 
-        @staticmethod
-        def upload_image(
-            user: User,
-            post_id: UUID,
-            image_uploads: UploadFile,
-            refresh_token: str,
-            db: Session,
-        ):
-            _ = validate_refresh_token(refresh_token, db)
+    @staticmethod
+    async def upload_image(
+        user: User,
+        post_id: UUID,
+        image_uploads: UploadFile,
+        refresh_token: str,
+        db: Session,
+    ):
+        _ = validate_refresh_token(refresh_token, db)
 
-            # restricts a user from uploading 0 or more than 2 images
-            if len(image_uploads) < 1 or len(image_uploads) > 2:
-                sentry_logger.error(
-                    'User {id} uploaded zero or more than two images', id=user.id
-                )
-                raise ImageUploadError()
+        # validate file uploaded to ensure an image is uploaded
+        for i in image_uploads:
+            if not await validate_image(i):
+                sentry_logger.error('User {id} uploaded an invalid image', id=user.id)
+                raise InvalidImageError()
 
-            post_db: Post = post_repo_v1.get_post_by_id(post_id, db)
+        # restricts a user from uploading 0 or more than 2 images
+        if len(image_uploads) < 1 or len(image_uploads) > 2:
+            sentry_logger.error(
+                'User {id} uploaded zero or more than two images', id=user.id
+            )
+            raise ImageUploadError()
 
-            if not post_db:
-                sentry_logger.error('Post {id} not found', id=post_id)
-                raise PostNotFoundError()
+        post_db: Post = post_repo_v1.get_post_by_id(post_id, db)
 
-            image_urls: list[str] = []
-            try:
-                for image in image_uploads:
-                    '''prevent duplicate image uploads if it already exists in database
-                    and has been written to disk even by another user forcing reference
-                    to the same image'''
-                    image_db: Image = post_repo_v1.get_image(image.filename, db)
-                    if image_db:
-                        '''create post image'''
-                        post_image: PostImage = PostImage(
-                            post_id=post_id, image_id=image_db.id
-                        )
-                        post_repo_v1.create_post_image(post_image, db)
-                    else:
-                        '''create image and post image'''
-                        image_path = Path(settings.PROFILE_IMAGE_PATH).resolve()
-                        filepath: str = f'{str(image_path)}\\{image.filename}'
-                        await write_file(filepath, image)
+        if not post_db:
+            sentry_logger.error('Post {id} not found', id=post_id)
+            raise PostNotFoundError()
 
-                        image_db: Image = Image(
-                            image_url=image.filename,
-                            image_type=image.content_type,
-                            image_size=image.size,
-                        )
+        image_urls: list[str] = []
+        try:
+            for image in image_uploads:
+                '''prevent duplicate image uploads if it already exists in database
+                and has been written to disk even by another user forcing reference
+                to the same image'''
+                image_db: Image = post_repo_v1.get_image(image.filename, db)
+                if image_db:
+                    '''create post image'''
+                    post_image: PostImage = PostImage(
+                        post_id=post_id, image_id=image_db.id
+                    )
+                    post_repo_v1.create_post_image(post_image, db)
+                else:
+                    '''create image and post image'''
+                    image_path = Path(settings.PROFILE_IMAGE_PATH).resolve()
+                    filepath: str = f'{str(image_path)}\\{image.filename}'
+                    await write_file(filepath, image)
 
-                        post_repo_v1.create_image(image_db, db)
+                    image_db: Image = Image(
+                        image_url=image.filename,
+                        image_type=image.content_type,
+                        image_size=image.size,
+                    )
 
-                    image_urls.append(image.filename)
+                    post_repo_v1.create_image(image_db, db)
 
-                db.commit()
-                post_images: ImageReadV1 = ImageReadV1(image_url=image_urls)
-                sentry_logger.info('User {id} post images uploaded', id=user.id)
-                return post_images
-            except Exception as e:
-                db.rollback()
-                sentry_sdk.capture_exception(e)
-                sentry_logger.error(
-                    'Internal server error occured while uploading user {id} post images',
-                    username=user.id,
-                )
-                raise ServerError() from e
+                image_urls.append(image.filename)
+
+            db.commit()
+            post_images: ImageReadV1 = ImageReadV1(image_url=image_urls)
+            sentry_logger.info('User {id} post images uploaded', id=user.id)
+            return post_images
+        except Exception as e:
+            db.rollback()
+            sentry_sdk.capture_exception(e)
+            sentry_logger.error(
+                'Internal server error occured while uploading user {id} post images',
+                username=user.id,
+            )
+            raise ServerError() from e
 
     @staticmethod
     def like_post(user: User, post_id: UUID, refresh_token: str, db: Session):
@@ -583,9 +591,7 @@ class PostServiceV1:
             raise ServerError() from e
 
     @staticmethod
-    def unlike_post(
-        user: User, post_id: UUID, refresh_token: str, db: Session
-    ):
+    def unlike_post(user: User, post_id: UUID, refresh_token: str, db: Session):
         _ = validate_refresh_token(refresh_token, db)
         like: Like | None = post_repo_v1.get_like(user.id, post_id, db)
 
@@ -658,9 +664,7 @@ class PostServiceV1:
             raise ServerError() from e
 
     @staticmethod
-    def delete_post(
-        post_id: UUID, user: User, refresh_token: str, db: Session
-    ):
+    def delete_post(post_id: UUID, user: User, refresh_token: str, db: Session):
         _ = validate_refresh_token(refresh_token, db)
 
         post_db: Post = post_repo_v1.get_post_by_id(post_id, db)
@@ -689,9 +693,7 @@ class PostServiceV1:
             raise ServerError() from e
 
     @staticmethod
-    def delete_comment(
-        comment_id: UUID, user: User, refresh_token: str, db: Session
-    ):
+    def delete_comment(comment_id: UUID, user: User, refresh_token: str, db: Session):
         _ = validate_refresh_token(refresh_token, db)
 
         comment_db: Comment = post_repo_v1.get_comment_by_id(comment_id, db)
@@ -717,6 +719,40 @@ class PostServiceV1:
                 'Internal server error occured while deleting comment {id} from database',
                 id=comment_id,
             )
+            raise ServerError() from e
+
+    @staticmethod
+    def delete_post_image(
+        post_id: UUID, image_url: str, refresh_token: str, db: Session
+    ):
+        _ = validate_refresh_token(refresh_token, db)
+
+        post_image: PostImage | None = post_repo_v1.get_post_image(
+            image_url, post_id, db
+        )
+
+        if not post_image:
+            sentry_logger.error(
+                'Image not found with url {image_url} for post {id}',
+                image_url=image_url,
+                id=post_id,
+            )
+            raise PostImageNotFoundError()
+
+        try:
+            post_repo_v1.delete_post_image(post_image, db)
+            db.commit()
+            path: Path = Path(settings.POST_IMAGE_PATH).resolve()
+            file_path: str = f'{str(path)}\\{image_url}'
+
+            if os.path.exists():
+                os.remove(file_path)
+
+            sentry_logger.info('Post image deleted')
+        except Exception as e:
+            db.rollback()
+            sentry_sdk.capture_exception(e)
+            sentry_logger.error('Internal server error while deleting post image')
             raise ServerError() from e
 
 

@@ -1,3 +1,4 @@
+import os
 import sentry_sdk
 from uuid import UUID
 from pathlib import Path
@@ -6,10 +7,10 @@ from sqlalchemy.orm import Session
 from sentry_sdk import logger as sentry_logger
 
 
-from app.utils import write_file
 from app.models.posts import Post
 from app.core.config import settings
 from app.models.users import User, Role
+from app.utils import write_file, validate_image
 from app.api.v1.schemas.images import ImageReadV1
 from app.models.images import Image, ProfileImage
 from app.core.security import validate_refresh_token
@@ -18,8 +19,8 @@ from app.api.v1.services.post_service import post_service_v1
 from app.api.v1.schemas.posts import PostReadV1, CommentReadV1
 from app.api.v1.schemas.users import (
     UserReadV1,
-    RoleCreateV1,
     UserUpdateV1,
+    RoleCreateV1,
     UserProfileV1,
     CurrentUserProfileV1,
 )
@@ -30,6 +31,7 @@ from app.core.exceptions import (
     UserExistsError,
     ImageUploadError,
     UserNotFoundError,
+    InvalidImageError,
     UsersNotFoundError,
     PostsNotFoundError,
     AvatarNotFoundError,
@@ -43,6 +45,7 @@ from app.core.exceptions import (
 class UserServiceV1:
     @staticmethod
     def get_users(
+        user: User,
         db: Session,
         refresh_token: str,
         nationality: str | None = None,
@@ -55,8 +58,8 @@ class UserServiceV1:
         _ = validate_refresh_token(refresh_token, db)
 
         try:
-            users_db: list[User]  = user_repo_v1.get_users(
-                db, nationality, year, sort, order, offset, limit
+            users_db: list[User] = user_repo_v1.get_users(
+                user.id, db, nationality, year, sort, order, offset, limit
             )
             if not users_db:
                 sentry_logger.error('Users not found in database')
@@ -612,9 +615,7 @@ class UserServiceV1:
         user_repo_v1.add_user(user, db)
 
     @staticmethod
-    def follow_user(
-        current_user: User, username: str, refresh_token: str, db: Session
-    ):
+    def follow_user(current_user: User, username: str, refresh_token: str, db: Session):
         _ = validate_refresh_token(refresh_token, db)
 
         user: User = user_repo_v1.get_user_by_username(username, db)
@@ -685,6 +686,12 @@ class UserServiceV1:
         db: Session,
     ) -> ImageReadV1:
         _ = validate_refresh_token(refresh_token, db)
+
+        # validate file uploaded to ensure an image is uploaded
+        for i in image_uploads:
+            if not await validate_image(i):
+                sentry_logger.error('User {id} uploaded an invalid image', id=user.id)
+                raise InvalidImageError()
 
         # restricts a user from uploading 0 or more than 2 images
         if len(image_uploads) < 1 or len(image_uploads) > 2:
@@ -833,6 +840,40 @@ class UserServiceV1:
             raise ServerError() from e
         finally:
             db.close()
+
+    @staticmethod
+    def delete_profile_image(
+        user: User, image_url: str, refresh_token: str, db: Session
+    ):
+        _ = validate_refresh_token(refresh_token, db)
+
+        profile_image: ProfileImage | None = user_repo_v1.get_profile_image(
+            image_url, user.id, db
+        )
+
+        if not profile_image:
+            sentry_logger.error(
+                'Image not found with url {image_url} for user {id}',
+                image_url=image_url,
+                id=user.id,
+            )
+            raise AvatarNotFoundError()
+
+        try:
+            user_repo_v1.delete_profile_image(profile_image, db)
+            db.commit()
+            path: Path = Path(settings.PROFILE_IMAGE_PATH).resolve()
+            file_path: str = f'{str(path)}\\{image_url}'
+
+            if os.path.exists():
+                os.remove(file_path)
+
+            sentry_logger.info('Profile image deleted')
+        except Exception as e:
+            db.rollback()
+            sentry_sdk.capture_exception(e)
+            sentry_logger.error('Internal server error while deleting profile image')
+            raise ServerError() from e
 
 
 user_service_v1 = UserServiceV1()

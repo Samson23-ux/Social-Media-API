@@ -42,12 +42,12 @@ async def get_users(
     order: str = Query(default=None, description='Sort in asc or desc order'),
     offset: int = Query(default=0),
     limit: int = Query(default=10),
-    _=Depends(get_current_user),
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     refresh_token: str | None = request.cookies.get('refresh_token')
     users: list[UserReadV1] = user_service_v1.get_users(
-        db, refresh_token, nationality, year, sort, order, offset, limit
+        user, db, refresh_token, nationality, year, sort, order, offset, limit
     )
     return UserResponseV1(message='Users retrieved successfully', data=users)
 
@@ -166,7 +166,7 @@ async def get_followers(
 
 
 @users_router_v1.get(
-    '/users/{username}/followers/',
+    '/users/{username}/followings/',
     status_code=200,
     response_model=UserResponseV1,
     description='Get user followers',
@@ -187,7 +187,7 @@ async def get_followings(
 
 
 @users_router_v1.get(
-    '/users/{username}/posts/comments',
+    '/users/{username}/posts/comments/',
     status_code=200,
     response_model=CommentResponseV1,
     description='Get user comments',
@@ -239,7 +239,7 @@ async def get_liked_posts(
 @users_router_v1.get(
     '/users/{username}/profile/images/{image_url}/',
     status_code=200,
-    response_model=FileResponse,
+    response_class=FileResponse,
     description='Get user profile image',
 )
 async def get_user_avatar(
@@ -257,24 +257,7 @@ async def get_user_avatar(
 
 
 @users_router_v1.post(
-    '/users/{username}/follow/',
-    status_code=201,
-    response_model=UserResponseV1,
-    description='Follow a user',
-)
-async def follow_user(
-    username: str,
-    request: Request,
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    refresh_token: str | None = request.cookies.get('refresh_token')
-    user_service_v1.follow_user(user, username, refresh_token, db)
-    return UserResponseV1(message='User followed successfully')
-
-
-@users_router_v1.post(
-    '/users/profile/images/upload/',
+    '/users/profile/images/',
     status_code=201,
     response_model=ImageResponseV1,
     description='Upload user avatar and header images',
@@ -312,6 +295,23 @@ async def update_user(
 
 
 @users_router_v1.patch(
+    '/users/{username}/follow/',
+    status_code=200,
+    response_model=UserResponseV1,
+    description='Follow a user',
+)
+async def follow_user(
+    username: str,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    refresh_token: str | None = request.cookies.get('refresh_token')
+    user_service_v1.follow_user(user, username, refresh_token, db)
+    return UserResponseV1(message='User followed successfully')
+
+
+@users_router_v1.patch(
     '/users/{username}/unfollow/',
     status_code=200,
     response_model=UserResponseV1,
@@ -326,3 +326,19 @@ async def unfollow_user(
     refresh_token: str | None = request.cookies.get('refresh_token')
     user_service_v1.unfollow_user(user, username, refresh_token, db)
     return UserResponseV1(message='User unfollowed successfully')
+
+
+@users_router_v1.delete(
+    '/users/profile/images/{image_url}/',
+    status_code=204,
+    description='Delete user profile image',
+)
+async def delete_profile_image(
+    image_url: str,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    refresh_token: str | None = request.cookies.get('refresh_token')
+    user_service_v1.delete_profile_image(user, image_url, refresh_token, db)
+    

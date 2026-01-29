@@ -13,6 +13,7 @@ from app.core.exceptions import (
     ImageUploadError,
     UserNotFoundError,
     PostNotFoundError,
+    InvalidImageError,
     UsersNotFoundError,
     AuthorizationError,
     PostsNotFoundError,
@@ -304,6 +305,19 @@ app.add_exception_handler(
             'error_code': 'Post image not found',
             'message': 'No post image found for the provided url',
             'resolution': 'Ensure the provided image url is correct',
+            'timestamp': error_time,
+        },
+    ),
+)
+
+app.add_exception_handler(
+    exc_class_or_status_code=InvalidImageError,
+    handler=create_exception_handler(
+        status_code=400,
+        initial_detail={
+            'error_code': 'Invalid image uploaded',
+            'message': 'User uploaded an invalid image format',
+            'resolution': 'Check that the file type uploaded is an image',
             'timestamp': error_time,
         },
     ),
