@@ -46,13 +46,13 @@ class CommentBaseV1(BaseModel):
 class CommentCreateV1(CommentBaseV1):
     pass
 
-    model_config = ConfigDict(str_strip_whitespace=True, extra='forbid', strict=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra='forbid')
 
 
 class PostCreateV1(PostBaseV1):
     pass
 
-    model_config = ConfigDict(str_strip_whitespace=True, extra='forbid', strict=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra='forbid')
 
 
 class PostUpdateV1(BaseModel):

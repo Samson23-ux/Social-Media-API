@@ -1,0 +1,80 @@
+version: '3'
+
+services:
+  postgres_api_db:
+    image: postgres:18
+    restart: always
+    enviroment:
+      - POSTGRES_DB=${API_DB}
+      - POSTGRES_USER=${API_DB_USER}
+      - POSTGRES_PASSWORD=${API_DB_PASSWORD}
+    ports:
+      "5432:5432"
+    container_name: postgres_api_db
+    volumes:
+      - api_postgres_db:/var/lib/postgresql/
+
+  postgres_test_db:
+    image: postgres:18
+    restart: always
+    enviroment:
+      - POSTGRES_DB=${TEST_DB}
+      - POSTGRES_USER=${TEST_DB_USER}
+      - POSTGRES_PASSWORD=${TEST_DB_PASSWORD}
+    ports:
+      "5433:5432"
+    container_name: postgres_test_db
+    volumes:
+      - test_postgres_db:/var/lib/postgresql/
+    depends_on:
+      - postgres_api_db
+
+  rabbitmq_api_broker:
+    image: rabbitmq:3-management
+    restart: always
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    container_name: rabbitmq_api_broker
+    depends_on:
+      - postgres_test_db
+
+  app_celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: Celery -A schedules.celery_app worker -l INFO -P gevent
+    container_name: app_celery_worker
+    volumes:
+      - .:/app
+    depends_on:
+      - rabbitmq_api_broker
+
+  app_celery_beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: Celery -A schedules.celery_app beat -l INFO
+    container_name: app_celery_beat
+    volumes:
+      - .:/app
+    depends_on:
+      - app_celery_worker
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file: .env
+    ports:
+      "8000:8000"
+    container_name: api
+    volumes:
+      - .:/app
+    depends_on:
+      - app_celery_beat
+
+
+volumes:
+  api_postgres_db
+  test_postgres_db

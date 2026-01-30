@@ -39,7 +39,7 @@ async def get_current_user(
 
 def required_roles(roles: list[UserRole]):
     def role_checker(user: User = Depends(get_current_user)):
-        if user.role not in roles:
+        if user.role.name not in roles:
             sentry_logger.error('User not permitted')
             raise AuthorizationError()
         return user

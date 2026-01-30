@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Query, File, UploadFile
 
 from app.models.users import User
 from app.api.v1.schemas.users import UserRole
-from app.api.v1.schemas.images import ImageReadV1
+from app.api.v1.schemas.images import ImageResponseV1
 from app.api.v1.services.post_service import post_service_v1
 from app.dependencies import get_current_user, get_db, required_roles
 from app.api.v1.schemas.posts import (
@@ -23,7 +23,6 @@ from app.api.v1.schemas.posts import (
 post_router_v1 = APIRouter()
 
 
-# return post by current user and post by users(public and followers visibility)
 @post_router_v1.get(
     '/posts/feed/',
     status_code=200,
@@ -74,7 +73,7 @@ async def get_search_posts(
     request: Request,
     q: str = Query(..., description='Search posts by title or using words in contents'),
     created_at: int = Query(default=None, description='Filter by year created'),
-    sort: str = Query(default=None, description='Sort by likes or created_at'),
+    sort: str = Query(default=None, description='Sort by likes'),
     order: str = Query(default=None, description='Sort in asc or desc order'),
     offset: int = Query(default=0),
     limit: int = Query(default=10),
@@ -189,23 +188,23 @@ async def create_post(
 @post_router_v1.post(
     '/posts/{post_id}/images/',
     status_code=201,
-    response_model=ImageReadV1,
+    response_model=ImageResponseV1,
     description='Upload post images',
 )
 async def create_post_image(
     post_id: UUID,
     request: Request,
-    post_images: UploadFile = File(
+    post_images: list[UploadFile] = File(
         ..., description='Upload at least 0 and at most 2 post image'
     ),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     refresh_token: str | None = request.cookies.get('refresh_token')
-    post_images: ImageReadV1 = post_service_v1.upload_image(
+    post_images: ImageResponseV1 = await post_service_v1.upload_image(
         user, post_id, post_images, refresh_token, db
     )
-    return ImageReadV1(message='Post images uploaded successfully', data=post_images)
+    return ImageResponseV1(message='Post images uploaded successfully', data=post_images)
 
 
 @post_router_v1.post(
@@ -225,7 +224,7 @@ async def create_comment(
     comment: CommentReadV1 = post_service_v1.create_comment(
         post_id, comment_create, user, refresh_token, db
     )
-    return PostResponseV1(message='Comment created successfully', data=comment)
+    return CommentResponseV1(message='Comment created successfully', data=comment)
 
 
 @post_router_v1.patch(
@@ -324,11 +323,11 @@ async def unlike_comment(
 async def delete_post(
     post_id: UUID,
     request: Request,
-    _=Depends(required_roles([UserRole.USER, UserRole.ADMIN])),
+    user: User = Depends(required_roles([UserRole.USER, UserRole.ADMIN])),
     db: Session = Depends(get_db),
 ):
     refresh_token: str | None = request.cookies.get('refresh_token')
-    post_service_v1.delete_post(post_id, refresh_token, db)
+    post_service_v1.delete_post(post_id, user, refresh_token, db)
 
 
 @post_router_v1.delete(
@@ -339,7 +338,7 @@ async def delete_post(
 async def delete_comment(
     comment_id: UUID,
     request: Request,
-    _=Depends(required_roles([UserRole.USER, UserRole.ADMIN])),
+    _ = Depends(required_roles([UserRole.USER, UserRole.ADMIN])),
     db: Session = Depends(get_db),
 ):
     refresh_token: str | None = request.cookies.get('refresh_token')

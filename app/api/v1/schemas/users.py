@@ -34,12 +34,12 @@ class UserBaseV1(BaseModel):
     @field_validator('username', mode='after')
     @classmethod
     def validate_username(cls, u: str):
-        regex_text = re.compile(r'^@(\w+){5}[^@]$')
-        m = regex_text.search(u)
+        regex_text = re.compile(r'^@\w{5,19}$')
+        m = regex_text.fullmatch(u)
 
         if not m:
             raise UsernameError()
-        return m.group()
+        return u
 
 
 # Base class for all user response
@@ -50,7 +50,7 @@ class BaseResponseV1(BaseModel):
 class UserCreateV1(UserBaseV1):
     password: str = Field(min_length=8)
 
-    model_config = ConfigDict(str_strip_whitespace=True, extra='forbid', strict=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra='forbid')
 
 
 class UserInDBV1(UserCreateV1):

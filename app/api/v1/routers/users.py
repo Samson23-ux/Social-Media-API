@@ -81,6 +81,26 @@ async def search_users(
 
 
 @users_router_v1.get(
+    '/users/me/profile/',
+    status_code=200,
+    response_model=UserProfileResponseV1,
+    description='Get current user profile',
+)
+async def get_profile(
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    refresh_token: str | None = request.cookies.get('refresh_token')
+    user_profile: UserProfileV1 = user_service_v1.get_current_user_profile(
+        user, refresh_token, db
+    )
+    return UserProfileResponseV1(
+        message='User profile retrieved successfully', data=user_profile
+    )
+
+
+@users_router_v1.get(
     '/users/{username}/posts/',
     status_code=200,
     description='Get user posts',
@@ -92,7 +112,7 @@ async def get_user_posts(
     created_at: int = Query(default=None, description='Filter by year created'),
     sort: str = Query(
         default=None,
-        description='Sort posts by likes, comments, created_at',
+        description='Sort posts by created_at',
     ),
     order: str = Query(default=None, description='Sort in asc or desc order'),
     offset: int = Query(default=0),
@@ -125,26 +145,6 @@ async def get_user(
 
 
 @users_router_v1.get(
-    '/users/me/profile/',
-    status_code=200,
-    response_model=UserProfileResponseV1,
-    description='Get current user profile',
-)
-async def get_profile(
-    request: Request,
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    refresh_token: str | None = request.cookies.get('refresh_token')
-    user_profile: UserProfileV1 = user_service_v1.get_current_user_profile(
-        user, refresh_token, db
-    )
-    return UserProfileResponseV1(
-        message='User profile retrieved successfully', data=user_profile
-    )
-
-
-@users_router_v1.get(
     '/users/{username}/followers/',
     status_code=200,
     response_model=UserResponseV1,
@@ -169,7 +169,7 @@ async def get_followers(
     '/users/{username}/followings/',
     status_code=200,
     response_model=UserResponseV1,
-    description='Get user followers',
+    description='Get user followings',
 )
 async def get_followings(
     username: str,
@@ -198,7 +198,7 @@ async def get_user_comments(
     created_at: int = Query(default=None, description='Filter by year created'),
     sort: str = Query(
         default=None,
-        description='Sort comments by likes and created_at',
+        description='Sort comments by created_at',
     ),
     order: str = Query(default=None, description='Sort in asc or desc order'),
     offset: int = Query(default=0),
@@ -278,7 +278,7 @@ async def upload_image(
 
 
 @users_router_v1.patch(
-    '/users/me/',
+    '/users/',
     status_code=200,
     response_model=UserResponseV1,
     description='Update user profile',

@@ -34,7 +34,7 @@ def create_admin_user():
     db_gen = get_db()
     db = next(db_gen)
     try:
-        auth_service_v1.sign_up(user_create, db)
+        auth_service_v1.sign_up(user_create, db, admin=True)
     finally:
         db.close()
 

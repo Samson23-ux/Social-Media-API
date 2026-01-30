@@ -60,7 +60,7 @@ class AuthServiceV1:
         return refresh_token
 
     @staticmethod
-    def sign_up(user_create: UserCreateV1, db: Session) -> User:
+    def sign_up(user_create: UserCreateV1, db: Session, admin: bool = None) -> User:
         user_with_email: User | None = user_repo_v1.get_user_by_email(
             user_create.email, db
         )
@@ -85,7 +85,11 @@ class AuthServiceV1:
         user_create.password = hash_password(user_create.password)
 
         user_in_db: UserInDBV1 = UserInDBV1(**user_create.model_dump())
-        role: Role = user_service_v1.get_role(user_in_db.role, db)
+
+        if admin:
+            role: Role = user_service_v1.get_role('admin', db)
+        else:
+            role: Role = user_service_v1.get_role(user_in_db.role, db)
 
         user: User = User(
             **user_in_db.model_dump(exclude={'role', 'password'}),
@@ -304,6 +308,7 @@ class AuthServiceV1:
     @staticmethod
     def reactivate_account(email: str, account_password, db: Session) -> User:
         user = user_repo_v1.get_deleted_user(email, db)
+
 
         if not user:
             sentry_logger.error('User with email: {email} not found', email=email)

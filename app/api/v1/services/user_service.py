@@ -7,15 +7,15 @@ from sqlalchemy.orm import Session
 from sentry_sdk import logger as sentry_logger
 
 
-from app.models.posts import Post
 from app.core.config import settings
 from app.models.users import User, Role
+from app.models.posts import Post, Comment
 from app.utils import write_file, validate_image
 from app.api.v1.schemas.images import ImageReadV1
 from app.models.images import Image, ProfileImage
 from app.core.security import validate_refresh_token
 from app.api.v1.repositories.user_repo import user_repo_v1
-from app.api.v1.services.post_service import post_service_v1
+from app.api.v1.repositories.post_repo import post_repo_v1
 from app.api.v1.schemas.posts import PostReadV1, CommentReadV1
 from app.api.v1.schemas.users import (
     UserReadV1,
@@ -74,7 +74,7 @@ class UserServiceV1:
             return users
         except Exception as e:
             '''raises the exceptions instead of 500 internal server error'''
-            if isinstance(e, UsersNotFoundError()):
+            if isinstance(e, UsersNotFoundError):
                 raise UsersNotFoundError()
 
             sentry_sdk.capture_exception(e)
@@ -112,7 +112,7 @@ class UserServiceV1:
             return users
         except Exception as e:
             '''raises the exceptions instead of 500 internal server error'''
-            if isinstance(e, UserNotFoundError()):
+            if isinstance(e, UserNotFoundError):
                 raise UsersNotFoundError()
 
             sentry_sdk.capture_exception(e)
@@ -130,7 +130,7 @@ class UserServiceV1:
             return user
         except Exception as e:
             '''raises the exception instead of 500 internal server error'''
-            if isinstance(e, UserNotFoundError()):
+            if isinstance(e, UserNotFoundError):
                 raise UserNotFoundError()
 
             sentry_sdk.capture_exception(e)
@@ -218,12 +218,13 @@ class UserServiceV1:
     ):
         _ = validate_refresh_token(refresh_token, db)
 
+        user_id = current_user.id
+
         try:
             '''only query db if current user tries to get otheruser's followers'''
             if current_user.username == username:
                 '''get the current user's followers'''
                 followers: list[User] | None = user_repo_v1.get_followers(current_user)
-                user_id = current_user.id
             else:
                 '''get other user's followers'''
                 user: User | None = user_repo_v1.get_user_by_username(username, db)
@@ -248,9 +249,9 @@ class UserServiceV1:
             return followers
         except Exception as e:
             '''raises the exceptions instead of 500 internal server error'''
-            if isinstance(e, UserNotFoundError()):
+            if isinstance(e, UserNotFoundError):
                 raise UserNotFoundError()
-            elif isinstance(e, FollowersNotFoundError()):
+            elif isinstance(e, FollowersNotFoundError):
                 raise FollowersNotFoundError()
 
             sentry_sdk.capture_exception(e)
@@ -266,6 +267,8 @@ class UserServiceV1:
     ):
         _ = validate_refresh_token(refresh_token, db)
 
+        user_id = current_user.id
+
         try:
             '''only query db if current user tries to get other user's followings'''
             if current_user.username == username:
@@ -273,7 +276,6 @@ class UserServiceV1:
                 followings: list[User] | None = user_repo_v1.get_followings(
                     current_user
                 )
-                user_id = current_user.id
             else:
                 '''get other user's followings'''
                 user: User | None = user_repo_v1.get_user_by_username(username, db)
@@ -298,9 +300,9 @@ class UserServiceV1:
             return followings
         except Exception as e:
             '''raises the exceptions instead of 500 internal server error'''
-            if isinstance(e, UserNotFoundError()):
+            if isinstance(e, UserNotFoundError):
                 raise UserNotFoundError()
-            elif isinstance(e, FollowingNotFoundError()):
+            elif isinstance(e, FollowingNotFoundError):
                 raise FollowingNotFoundError()
 
             sentry_sdk.capture_exception(e)
@@ -324,10 +326,11 @@ class UserServiceV1:
     ) -> list[PostReadV1]:
         _ = validate_refresh_token(refresh_token, db)
 
+        user_id = current_user.id
+
         try:
             if current_user.username == username:
                 '''select all posts made by the current logged in user'''
-                user_id = current_user.id
 
                 posts_db: list = user_repo_v1.get_current_user_posts(
                     user_id, db, created_at, sort, order, offset, limit
@@ -372,9 +375,9 @@ class UserServiceV1:
                     created_at,
                     display_name,
                     username,
-                    comments,
-                    likes,
                 ) = post_db
+
+                post: Post = post_repo_v1.get_post_by_id(id, db)
 
                 post_read = PostReadV1(
                     id=id,
@@ -384,8 +387,8 @@ class UserServiceV1:
                     created_at=created_at,
                     display_name=display_name,
                     username=username,
-                    comments=comments,
-                    likes=likes,
+                    comments=len(post.comments),
+                    likes=len(post.likes),
                 )
                 user_posts.append(post_read)
 
@@ -393,9 +396,9 @@ class UserServiceV1:
             return user_posts
         except Exception as e:
             '''raises the exceptions instead of 500 internal server error'''
-            if isinstance(e, UserNotFoundError()):
+            if isinstance(e, UserNotFoundError):
                 raise UserNotFoundError()
-            elif isinstance(e, PostsNotFoundError()):
+            elif isinstance(e, PostsNotFoundError):
                 raise PostsNotFoundError()
 
             sentry_sdk.capture_exception(e)
@@ -416,13 +419,14 @@ class UserServiceV1:
     ) -> list[PostReadV1]:
         _ = validate_refresh_token(refresh_token, db)
 
+        user_id = current_user.id
+
         try:
             '''only query db if current user tries to get other user's liked posts'''
             if current_user.username == username:
                 liked_posts: list = user_repo_v1.get_liked_posts(
                     current_user.id, db, offset, limit
                 )
-                user_id = current_user.id
             else:
                 user: User | None = user_repo_v1.get_user_by_username(username, db)
 
@@ -453,7 +457,7 @@ class UserServiceV1:
                     created_at,
                 ) = post_db
 
-                post: Post = post_service_v1.get_post_by_id(id, refresh_token, db)
+                post: Post = post_repo_v1.get_post_by_id(id, db)
 
                 post_read = PostReadV1(
                     id=id,
@@ -472,9 +476,9 @@ class UserServiceV1:
             return user_posts
         except Exception as e:
             '''raises the exceptions instead of 500 internal server error'''
-            if isinstance(e, UserNotFoundError()):
+            if isinstance(e, UserNotFoundError):
                 raise UserNotFoundError()
-            elif isinstance(e, PostsNotFoundError()):
+            elif isinstance(e, PostsNotFoundError):
                 raise PostsNotFoundError()
 
             sentry_sdk.capture_exception(e)
@@ -498,6 +502,8 @@ class UserServiceV1:
     ) -> list[CommentReadV1]:
         _ = validate_refresh_token(refresh_token, db)
 
+        user_id = current_user.id
+
         try:
             '''only query db if current user tries to get otheruser's followings'''
             if current_user.username == username:
@@ -505,7 +511,6 @@ class UserServiceV1:
                 comments: list = user_repo_v1.get_user_comments(
                     current_user.id, db, created_at, sort, order, offset, limit
                 )
-                user_id = current_user.id
             else:
                 '''get other user's comments'''
                 user: User | None = user_repo_v1.get_user_by_username(username, db)
@@ -526,15 +531,16 @@ class UserServiceV1:
                 raise CommentsNotFoundError()
 
             user_comments: list[CommentReadV1] = []
-            for comment in comments:
-                comment_id, content, display_name, username, created_at, likes = comment
+            for comment_db in comments:
+                comment_id, content, display_name, username, created_at = comment_db
+                comment: Comment = post_repo_v1.get_comment_by_id(comment_id, db)
                 comment_read = CommentReadV1(
                     id=comment_id,
                     content=content,
                     display_name=display_name,
                     username=username,
                     created_at=created_at,
-                    likes=likes,
+                    likes=len(comment.comment_likes),
                 )
                 user_comments.append(comment_read)
 
@@ -542,9 +548,9 @@ class UserServiceV1:
             return user_comments
         except Exception as e:
             '''raises the exceptions instead of 500 internal server error'''
-            if isinstance(e, UserNotFoundError()):
+            if isinstance(e, UserNotFoundError):
                 raise UserNotFoundError()
-            elif isinstance(e, CommentsNotFoundError()):
+            elif isinstance(e, CommentsNotFoundError):
                 raise CommentsNotFoundError()
 
             sentry_sdk.capture_exception(e)
@@ -564,6 +570,8 @@ class UserServiceV1:
     ):
         _ = validate_refresh_token(refresh_token, db)
 
+        user_id = current_user.id
+
         try:
             '''only query db if current user tries to get otheruser's followings'''
             if current_user.username == username:
@@ -571,7 +579,6 @@ class UserServiceV1:
                 url: str | None = user_repo_v1.get_user_avatar(
                     image_url, current_user.id, db
                 )
-                user_id = current_user.id
             else:
                 '''get other user avatar'''
 
@@ -597,9 +604,9 @@ class UserServiceV1:
             return filepath
         except Exception as e:
             '''raises the exceptions instead of 500 internal server error'''
-            if isinstance(e, UserNotFoundError()):
+            if isinstance(e, UserNotFoundError):
                 raise UserNotFoundError()
-            elif isinstance(e, AvatarNotFoundError()):
+            elif isinstance(e, AvatarNotFoundError):
                 raise AvatarNotFoundError()
 
             sentry_sdk.capture_exception(e)
@@ -732,7 +739,7 @@ class UserServiceV1:
                         image_size=img.size,
                     )
                     user_repo_v1.create_image(user, image, db)
-                image_urls.append(image.filename)
+                image_urls.append(img.filename)
 
             db.commit()
             profile_images: ImageReadV1 = ImageReadV1(image_url=image_urls)

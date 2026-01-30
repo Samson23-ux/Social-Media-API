@@ -18,6 +18,19 @@ class Settings(BaseSettings):
     DATABASE_URL: str
     WORKER_DATABASE_URL: str
 
+    #API DB Credentials
+    API_DB: str
+    API_DB_USER: str
+    API_DB_PASSWORD: str
+
+    #Test DB Credentials
+    TEST_DB: str
+    TEST_DB_USER: str
+    TEST_DB_PASSWORD: str
+
+    # TEST DB URL
+    TEST_DATABASE_URL: str
+
     #Broker URI
     BROKER_URL: str
 

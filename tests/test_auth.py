@@ -2,6 +2,7 @@ from tests.fake_data import user_create_1
 
 '''tests are independent and can run alone and pass'''
 
+
 def test_sign_up(create_role, sign_up):
     res = sign_up
     assert res.status_code == 201
@@ -10,59 +11,75 @@ def test_sign_up(create_role, sign_up):
 
 def test_duplicate_user(create_role, sign_up, test_client):
     '''create an existing user'''
-    res = test_client.post(
-        'api/v1/auth/sign-up/',
-        json=user_create_1
-    )
+    res = test_client.post('/api/v1/auth/sign-up/', json=user_create_1)
     assert res.status_code == 400
 
 
 def test_sign_in(create_role, sign_up, test_client):
     res = test_client.post(
-        'api/v1/auth/sign-in/',
-        data={'username': user_create_1.get('email'), 'password': user_create_1.get('password')}
+        '/api/v1/auth/sign-in/',
+        data={
+            'username': user_create_1.get('email'),
+            'password': user_create_1.get('password'),
+        },
     )
     assert res.status_code == 201
     assert 'access_token' in res.json()
 
+
 def test_incorrect_creds(create_role, sign_up, test_client):
     res = test_client.post(
-        'api/v1/auth/sign-in/',
-        data={'username': user_create_1.get('email'), 'password': 'password'}
+        '/api/v1/auth/sign-in/',
+        data={'username': user_create_1.get('email'), 'password': 'password'},
     )
     assert res.status_code == 400
+
 
 def test_get_access_token(create_role, sign_up, test_client):
     '''request for a new access token with a valid refresh token'''
     test_client.post(
-        'api/v1/auth/sign-in/',
-        data={'username': user_create_1.get('email'), 'password': user_create_1.get('password')}
+        '/api/v1/auth/sign-in/',
+        data={
+            'username': user_create_1.get('email'),
+            'password': user_create_1.get('password'),
+        },
     )
 
-    res = test_client.get('/auth/refresh/')
+    res = test_client.get('/api/v1/auth/refresh/')
     assert res.status_code == 200
-    assert 'access_token' in res.json()['data']
+    assert 'access_token' in res.json()
+
 
 def test_sign_out(create_role, sign_up, test_client):
     sign_in_res = test_client.post(
-        'api/v1/auth/sign-in/',
-        data={'username': user_create_1.get('email'), 'password': user_create_1.get('password')}
+        '/api/v1/auth/sign-in/',
+        data={
+            'username': user_create_1.get('email'),
+            'password': user_create_1.get('password'),
+        },
     )
 
     res = test_client.patch(
-        'api/v1/auth/sign-out/',
-        headers={'Authorization': f'Bearer {sign_in_res.json()['access_token']}'}
+        '/api/v1/auth/sign-out/',
+        headers={'Authorization': f'Bearer {sign_in_res.json()['access_token']}'},
     )
     assert res.status_code == 200
 
+
 def test_update_password(create_role, sign_up, test_client):
     sign_in_res = test_client.post(
-        'api/v1/auth/sign-in/',
-        data={'username': user_create_1.get('email'), 'password': user_create_1.get('password')}
+        '/api/v1/auth/sign-in/',
+        data={
+            'username': user_create_1.get('email'),
+            'password': user_create_1.get('password'),
+        },
     )
     res = test_client.patch(
-        'api/v1/auth/update-password/',
-        data={'curr_password': user_create_1.get('password'), 'new_password': 'random_password123'},
+        '/api/v1/auth/update-password/',
+        data={
+            'curr_password': user_create_1.get('password'),
+            'new_password': 'random_password123',
+        },
         headers={'Authorization': f'Bearer {sign_in_res.json()['access_token']}'},
     )
 
@@ -73,8 +90,8 @@ def test_update_password(create_role, sign_up, test_client):
 
 def test_reset_password(create_role, sign_up, test_client):
     res = test_client.patch(
-        'api/v1/auth/reset-password/',
-        data={'email': user_create_1.get('email'), 'new_password': 'new_rand_int'}
+        '/api/v1/auth/reset-password/',
+        data={'email': user_create_1.get('email'), 'new_password': 'new_rand_int'},
     )
 
     assert res.status_code == 200
@@ -83,28 +100,51 @@ def test_reset_password(create_role, sign_up, test_client):
 def test_user_not_found(create_role, sign_up, test_client):
     '''test incorrect email for password reset'''
     res = test_client.patch(
-        'api/v1/auth/reset-password/',
-        data={'email': 'email.example.com', 'new_password': 'new_rand_int'}
+        '/api/v1/auth/reset-password/',
+        data={'email': 'email.example.com', 'new_password': 'new_rand_int'},
     )
 
     assert res.status_code == 404
 
+
 def test_reactivate_account(create_role, sign_up, test_client):
+    sign_in_res = test_client.post(
+        '/api/v1/auth/sign-in/',
+        data={
+            'username': user_create_1.get('email'),
+            'password': user_create_1.get('password'),
+        },
+    )
+
+    tt = test_client.patch(
+        '/api/v1/auth/account/deactivate/',
+        data={'password': user_create_1.get('password')},
+        headers={'Authorization': f'Bearer {sign_in_res.json()['access_token']}'},
+    )
+
     res = test_client.patch(
-        'api/v1/auth/account/reactivate/',
-        data={'email': user_create_1.get('email'), 'account_password': 'random_password123'},
+        '/api/v1/auth/account/reactivate/',
+        data={
+            'email': user_create_1.get('email'),
+            'account_password': user_create_1.get('password'),
+        },
     )
 
     assert res.status_code == 200
 
+
 def test_deactivate_account(create_role, sign_up, test_client):
     sign_in_res = test_client.post(
-        'api/v1/auth/sign-in/',
-        data={'username': user_create_1.get('email'), 'password': user_create_1.get('password')}
+        '/api/v1/auth/sign-in/',
+        data={
+            'username': user_create_1.get('email'),
+            'password': user_create_1.get('password'),
+        },
     )
 
     res = test_client.patch(
-        'api/v1/auth/account/deactivate/',
+        '/api/v1/auth/account/deactivate/',
+        data={'password': user_create_1.get('password')},
         headers={'Authorization': f'Bearer {sign_in_res.json()['access_token']}'},
     )
 
@@ -113,23 +153,27 @@ def test_deactivate_account(create_role, sign_up, test_client):
 
 def test_delete_account(create_role, sign_up, test_client):
     sign_in_res = test_client.post(
-        'api/v1/auth/sign-in/',
-        data={'username': user_create_1.get('email'), 'password': user_create_1.get('password')}
+        '/api/v1/auth/sign-in/',
+        data={
+            'username': user_create_1.get('email'),
+            'password': user_create_1.get('password'),
+        },
     )
 
     res = test_client.request(
         'DELETE',
-        'api/v1/auth/account/delete/',
+        '/api/v1/auth/account/delete/',
         data={'password': user_create_1.get('password')},
         headers={'Authorization': f'Bearer {sign_in_res.json()['access_token']}'},
     )
 
     assert res.status_code == 204
 
+
 def test_unauthenticated_auth(create_role, sign_up, test_client):
     res = test_client.request(
         'DELETE',
-        'api/v1/auth/account/delete/',
+        '/api/v1/auth/account/delete/',
         data={'password': user_create_1.get('password')},
     )
 

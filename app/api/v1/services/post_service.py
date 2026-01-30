@@ -122,9 +122,9 @@ class PostServiceV1:
                     display_name,
                     username,
                     vector_rank,
-                    comments,
-                    likes,
                 ) = post_db
+
+                post: Post = post_repo_v1.get_post_by_id(id, db)
 
                 post_read = PostReadV1(
                     id=id,
@@ -134,8 +134,8 @@ class PostServiceV1:
                     created_at=created_at,
                     display_name=display_name,
                     username=username,
-                    comments=comments,
-                    likes=likes,
+                    comments=len(post.comments),
+                    likes=len(post.likes),
                 )
                 search_posts.append(post_read)
 
@@ -413,7 +413,7 @@ class PostServiceV1:
     async def upload_image(
         user: User,
         post_id: UUID,
-        image_uploads: UploadFile,
+        image_uploads: list[UploadFile],
         refresh_token: str,
         db: Session,
     ):
@@ -462,8 +462,7 @@ class PostServiceV1:
                         image_type=image.content_type,
                         image_size=image.size,
                     )
-
-                    post_repo_v1.create_image(image_db, db)
+                    post_repo_v1.create_image(post_db, image_db, db)
 
                 image_urls.append(image.filename)
 
@@ -693,7 +692,7 @@ class PostServiceV1:
             raise ServerError() from e
 
     @staticmethod
-    def delete_comment(comment_id: UUID, user: User, refresh_token: str, db: Session):
+    def delete_comment(comment_id: UUID, refresh_token: str, db: Session):
         _ = validate_refresh_token(refresh_token, db)
 
         comment_db: Comment = post_repo_v1.get_comment_by_id(comment_id, db)
@@ -701,9 +700,6 @@ class PostServiceV1:
         if not comment_db:
             sentry_logger.error('Comment {id} not found', id=comment_id)
             raise CommentNotFoundError()
-
-        if comment_db.user_id != user.id or user.role != UserRole.ADMIN:
-            raise AuthorizationError()
 
         try:
             post_repo_v1.delete_comment(comment_db, db)

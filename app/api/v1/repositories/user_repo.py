@@ -2,12 +2,12 @@ from uuid import UUID
 from typing import Any
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
-from sqlalchemy import select, delete, and_, func, desc, or_, case
+from sqlalchemy import select, delete, and_, func, desc, or_
 
 from app.models.users import User, Role
 from app.models.images import Image, ProfileImage
 from app.api.v1.schemas.posts import VisibilityEnum
-from app.models.posts import Post, Like, Comment, CommentLike
+from app.models.posts import Post, Like, Comment
 
 
 class UserRepoV1:
@@ -176,7 +176,7 @@ class UserRepoV1:
     ) -> list:
         '''select current user's posts and handle sorting by likes and comments'''
 
-        sortable_fields: list[str] = ['created_at', 'likes', 'comments']
+        sortable_fields: dict = {'created_at': Post.created_at}
         stmt = select(
             Post.id,
             Post.title,
@@ -191,44 +191,13 @@ class UserRepoV1:
         if created_at:
             stmt = stmt.where(Post.created_at.year == created_at)
 
-        '''the control flow below sort by one of the sortable fields
-        for the likes and comments, a column is generated as likes/comments
-        that represents the total number of likes/comments for the post
-        done by joining the posts table with likes/comments and grouping
-        by post then using the window function count to get the total
-        likes/comments'''
-        stmt = (
-            # posts with zero comments or likes are set to 0
-            stmt.select(
-                case(
-                    (Comment.post_id.is_(None), 0),
-                    else_=func.count(User.id),
-                ).label('comments'),
-                case(
-                    (Like.post_id.is_(None), 0),
-                    else_=func.count(User.id),
-                ).label('likes'),
-            )
-            .outerjoin(Post, Post.id == Comment.post_id)
-            .outerjoin(Post, Post.id == Like.post_id)
-            .group_by(Comment.post_id)
-        )
-
-        if sort not in sortable_fields or sort == 'created_at':
+        if sort:
             if order == 'desc':
-                stmt = stmt.order_by(desc(Post.created_at))
+                stmt = stmt.order_by(
+                    desc(sortable_fields.get('created_at', Post.created_at))
+                )
             else:
-                stmt = stmt.order_by(Post.created_at)
-        elif sort == 'likes':
-            if order == 'desc':
-                stmt = stmt.order_by(desc('likes'))
-            else:
-                stmt = stmt.order_by('likes')
-        elif sort == 'comments':
-            if order == 'desc':
-                stmt = stmt.order_by(desc('comments'))
-            else:
-                stmt = stmt.order_by('comments')
+                stmt = stmt.order_by(sortable_fields.get('created_at', Post.created_at))
 
         stmt = stmt.offset(offset).limit(limit)
         user_posts: list = db.execute(stmt).all()
@@ -251,7 +220,7 @@ class UserRepoV1:
         whose visibility is set to followers if the current
         user is follwer in addition to public posts'''
 
-        sortable_fields: list[str] = ['created_at', 'likes', 'comments']
+        sortable_fields: dict = {'created_at': Post.created_at}
         if current_user in user.followers:
             stmt = (
                 select(
@@ -294,38 +263,13 @@ class UserRepoV1:
         if created_at:
             stmt = stmt.where(Post.created_at.year == created_at)
 
-        stmt = (
-            # posts with zero comments or likes are set to 0
-            stmt.select(
-                case(
-                    (Comment.post_id.is_(None), 0),
-                    else_=func.count(Comment.user_id),
-                ).label('comments'),
-                case(
-                    (Like.post_id.is_(None), 0),
-                    else_=func.count(Comment.user_id),
-                ).label('likes'),
-            )
-            .outerjoin(Post, Post.id == Comment.post_id)
-            .outerjoin(Post, Post.id == Like.post_id)
-            .group_by(Comment.post_id)
-        )
-
-        if sort not in sortable_fields or sort == 'created_at':
+        if sort:
             if order == 'desc':
-                stmt = stmt.order_by(desc(Post.created_at))
+                stmt = stmt.order_by(
+                    desc(sortable_fields.get('created_at', Post.created_at))
+                )
             else:
-                stmt = stmt.order_by(Post.created_at)
-        elif sort == 'likes':
-            if order == 'desc':
-                stmt = stmt.order_by(desc('likes'))
-            else:
-                stmt = stmt.order_by('likes')
-        elif sort == 'comments':
-            if order == 'desc':
-                stmt = stmt.order_by(desc('comments'))
-            else:
-                stmt = stmt.order_by('comments')
+                stmt = stmt.order_by(sortable_fields.get('created_at', Post.created_at))
 
         stmt = stmt.offset(offset).limit(limit)
         user_posts: list = db.execute(stmt).all()
@@ -341,7 +285,7 @@ class UserRepoV1:
         offset: int = 0,
         limit: int = 10,
     ) -> list:
-        sortable_fields: list = ['created_at', 'likes']
+        sortable_fields: dict = {'created_at': Post.created_at}
         stmt = select(
             Comment.id,
             Comment.content,
@@ -350,33 +294,17 @@ class UserRepoV1:
             Comment.created_at,
         ).join(User, Comment.user_id == user_id)
 
+        # filter by date created if set
         if created_at:
             stmt = stmt.where(Comment.created_at.year == created_at)
 
-        stmt = (
-            stmt.select(
-                case(
-                    (CommentLike.comment_id.is_(None), 0),
-                    else_=func.count(CommentLike.user_id),
-                ).label('likes')
-            )
-            .outerjoin(CommentLike, CommentLike.comment_id == Comment.id)
-            .group_by(CommentLike.comment_id)
-        )
-
         if sort:
-            if sort not in sortable_fields or sort == 'created_at':
-                '''sort by created_at'''
-                if order == 'desc':
-                    stmt = stmt.order_by(desc(Comment.created_at))
-                else:
-                    stmt = stmt.order_by(Comment.created_at)
+            if order == 'desc':
+                stmt = stmt.order_by(
+                    desc(sortable_fields.get('created_at', Post.created_at))
+                )
             else:
-                '''sort by likes'''
-                if order == 'desc':
-                    stmt = stmt.order_by(desc('likes'))
-                else:
-                    stmt = stmt.order_by('likes')
+                stmt = stmt.order_by(sortable_fields.get('created_at', Post.created_at))
 
         stmt = stmt.offset(offset).limit(limit)
 
@@ -400,6 +328,7 @@ class UserRepoV1:
                 Post.visibility,
                 Post.created_at,
             )
+            .select_from(User)
             .join(Like, Like.user_id == user_id)
             .join(Post, Post.id == Like.post_id)
             .offset(offset)

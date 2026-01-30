@@ -1,10 +1,12 @@
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy import create_engine, Engine, text, Connection, RootTransaction
 
 from app.main import app
 from app.database.base import Base
 from app.dependencies import get_db
-from tests.config import db_engine, test_get_db
+from app.core.config import settings
 
 from tests.fake_data import user_create_1, post_create_1
 from app.api.v1.services.auth_service import user_service_v1
@@ -12,36 +14,67 @@ from app.api.v1.services.auth_service import auth_service_v1
 from app.api.v1.schemas.users import UserCreateV1, RoleCreateV1
 
 
-@pytest.fixture(scope='function', autouse=True)
-def create_test_db():
-    print('Table created')
-    Base.metadata.create_all(bind=db_engine)
-    yield
-    Base.metadata.drop_all(bind=db_engine)
+@pytest.fixture(scope='session')
+def test_engine():
+    '''create an engine per session'''
+    engine: Engine = create_engine(url=settings.TEST_DATABASE_URL)
 
+    with engine.connect() as conn:
+        # initialise db with required extensions
+        conn.execute(text('CREATE EXTENSION IF NOT EXISTS pg_trgm;'))
+        conn.execute(text('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"'))
 
-app.dependency_overrides[get_db] = test_get_db
+    Base.metadata.create_all(bind=engine)
+
+    return engine
 
 
 @pytest.fixture
-def test_client():
+def test_db_session(test_engine):
+    '''establish a session bound to a connection with a transaction and on
+    session.commit(), it flushes changes and nothing gets committed to db'''
+    connection: Connection = test_engine.connect()
+    transaction: RootTransaction = connection.begin()
+
+    TestSessionLocal: Session = sessionmaker(
+        autoflush=False, autocommit=False, bind=connection, expire_on_commit=False
+    )
+
+    session: Session = TestSessionLocal()
+
+    try:
+        yield session
+    finally:
+        session.close()
+        transaction.rollback()
+        connection.close()
+
+
+@pytest.fixture
+def test_client(test_db_session):
+    '''test client runs before every test and the get_db gets overriden'''
+
+    def test_get_db():
+        yield test_db_session
+
+    app.dependency_overrides[get_db] = test_get_db
+
     with TestClient(app) as client:
         yield client
 
 
 @pytest.fixture
-def create_role():
+def create_role(test_db_session):
     admin_role = RoleCreateV1(name='admin')
     user_role = RoleCreateV1(name='user')
 
-    db_gen = test_get_db()
-    db = next(db_gen)
+    db = test_db_session
     user_service_v1.create_role(admin_role, db)
     user_service_v1.create_role(user_role, db)
 
 
 @pytest.fixture
-def create_admin(create_role):
+def create_admin(test_db_session, create_role):
     user_create = UserCreateV1(
         display_name='fake_admin',
         username='@fake_admin',
@@ -49,31 +82,31 @@ def create_admin(create_role):
         password='fakepassword',
         dob='1999-05-20',
         nationality='fake_nationality',
-        bio='admin...'
+        bio='admin...',
     )
 
-    db_gen = test_get_db()
-    db = next(db_gen)
-    auth_service_v1.sign_up(user_create, db)
+    db = test_db_session
+    auth_service_v1.sign_up(user_create, db, admin=True)
 
 
 @pytest.fixture
 def sign_up(test_client):
-    res = test_client.post(
-        'api/v1/auth/sign-up/',
-        json=user_create_1
-    )
+    res = test_client.post('/api/v1/auth/sign-up/', json=user_create_1)
     return res
+
 
 @pytest.fixture
 def create_post(sign_up, test_client):
     sign_in_res = test_client.post(
-        'api/v1/auth/sign-in/',
-        data={'username': user_create_1.get('email'), 'password': user_create_1.get('password')}
+        '/api/v1/auth/sign-in/',
+        data={
+            'username': user_create_1.get('email'),
+            'password': user_create_1.get('password'),
+        },
     )
 
     res = test_client.post(
-        'api/v1/posts/',
+        '/api/v1/posts/',
         json=post_create_1,
         headers={'Authorization': f'Bearer {sign_in_res.json()['access_token']}'},
     )

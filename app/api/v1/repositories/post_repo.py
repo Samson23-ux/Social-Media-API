@@ -29,19 +29,25 @@ class PostRepoV1:
                 User.display_name,
                 User.username,
             )
+            .select_from(Post)
             .join(User, Post.user_id == User.id)
-            .join(
+            .outerjoin(
                 follows,
-                or_(
-                    and_(
-                        Post.user_id == follows.c.following_id,
-                        user_id == follows.c.follower_id,
-                    ),
-                    Post.visibility != VisibilityEnum.FOLLOWERS,
-                    Post.user_id == user_id,
+                and_(
+                    Post.user_id == follows.c.following_id,
+                    user_id == follows.c.follower_id,
                 ),
             )
-            .where(Post.visibility != VisibilityEnum.PRIVATE)
+            .where(
+                or_(
+                    Post.user_id == user_id,
+                    Post.visibility == VisibilityEnum.PUBLIC,
+                    and_(
+                        Post.visibility == VisibilityEnum.FOLLOWERS,
+                        follows.c.follower_id.is_not(None),
+                    ),
+                )
+            )
         )
 
         stmt = stmt.offset(offset).limit(limit)
@@ -59,7 +65,7 @@ class PostRepoV1:
         offset: int = 0,
         limit: int = 10,
     ) -> list:
-        sortable_fields: list = ['created_at', 'likes']
+        sortable_fields: dict = {'created_at': Post.created_at}
         query_vector = func.websearch_to_tsquery('english', q)
         vector_rank = func.ts_rank(Post.content_search, query_vector).label(
             'vector_rank'
@@ -78,22 +84,20 @@ class PostRepoV1:
                 vector_rank,
             )
             .join(User, Post.user_id == User.id)
-            .join(
+            .outerjoin(
                 follows,
-                or_(
-                    and_(
-                        Post.user_id == follows.c.following_id,
-                        user_id == follows.c.follower_id,
-                    ),
-                    Post.visibility != VisibilityEnum.FOLLOWERS,
-                    Post.user_id == user_id,
+                and_(
+                    Post.user_id == follows.c.following_id,
+                    user_id == follows.c.follower_id,
                 ),
             )
             .where(
-                and_(
-                    Post.visibility != VisibilityEnum.PRIVATE,
-                    or_(
-                        Post.content_search.op('@@')(query_vector), Post.title.ilike(q)
+                or_(
+                    Post.user_id == user_id,
+                    Post.visibility == VisibilityEnum.PUBLIC,
+                    and_(
+                        Post.visibility == VisibilityEnum.FOLLOWERS,
+                        follows.c.follower_id.is_not(None)
                     ),
                 )
             )
@@ -102,31 +106,13 @@ class PostRepoV1:
         if created_at:
             stmt = stmt.where(Post.created_at == created_at)
 
-        stmt = (
-            stmt.select(
-                case(
-                    (Comment.post_id.is_(None), 0),
-                    else_=func.count(Comment.user_id),
-                ).label('comments'),
-                case(
-                    (Like.post_id.is_(None), 0),
-                    else_=func.count(Like.user_id),
-                ).label('likes')
-            )
-            .outerjoin(Like, Post.id == Like.post_id)
-            .group_by(Like.post_id)
-        )
-
-        if sort not in sortable_fields or sort == 'created_at':
+        if sort:
             if order == 'desc':
-                stmt = stmt.order_by(desc(Post.created_at))
+                stmt = stmt.order_by(
+                    desc(sortable_fields.get('created_at', Post.created_at))
+                )
             else:
-                stmt = stmt.order_by(Post.created_at)
-        elif sort == 'likes':
-            if order == 'desc':
-                stmt = stmt.order_by(desc('likes'))
-            else:
-                stmt = stmt.order_by('likes')
+                stmt = stmt.order_by(sortable_fields.get('created_at', Post.created_at))
 
         stmt = stmt.offset(offset).limit(limit)
         search_posts: list = db.execute(stmt).all()
@@ -163,7 +149,7 @@ class PostRepoV1:
 
     @staticmethod
     def get_image(image_url: str, db: Session):
-        stmt = select(Image).where(Image.url == image_url)
+        stmt = select(Image).where(Image.image_url == image_url)
         image: Image = db.execute(stmt).scalar()
         return image
 
@@ -206,14 +192,14 @@ class PostRepoV1:
         )
 
         stmt = (
-            stmt.select(
+            stmt.add_columns(
                 case(
                     (CommentLike.comment_id.is_(None), 0),
                     else_=func.count(CommentLike.user_id),
                 ).label('likes')
             )
             .outerjoin(CommentLike, Comment.id == CommentLike.comment_id)
-            .group_by(CommentLike.comment_id)
+            .group_by(Comment.id, CommentLike.comment_id)
         )
 
         if sort not in sortable_fields or sort == 'created_at':
@@ -230,12 +216,9 @@ class PostRepoV1:
         stmt = stmt.offset(offset).limit(limit)
         post_comments: list = db.execute(stmt).all()
         return post_comments
-    
 
     @staticmethod
-    def get_post_image(
-        image_url: UUID, post_id: UUID, db: Session
-    ) -> PostImage | None:
+    def get_post_image(image_url: UUID, post_id: UUID, db: Session) -> PostImage | None:
         stmt = (
             select(PostImage)
             .join(Image, PostImage.image_id == Image.id)
@@ -243,7 +226,6 @@ class PostRepoV1:
         )
         post_image: PostImage | None = db.execute(stmt).scalar()
         return post_image
-
 
     @staticmethod
     def add_post(post: Post, db: Session):
