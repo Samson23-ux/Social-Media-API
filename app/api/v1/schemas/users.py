@@ -74,8 +74,18 @@ class UserUpdateV1(BaseModel):
     def email_to_lower(cls, e: Any):
         if isinstance(e, EmailStr):
             return e.lower()
+        
+    @field_validator('username', mode='after')
+    @classmethod
+    def validate_username(cls, u: str):
+        regex_text = re.compile(r'^@\w{5,19}$')
+        m = regex_text.fullmatch(u)
 
-    model_config = ConfigDict(str_strip_whitespace=True, extra='forbid', strict=True)
+        if not m:
+            raise UsernameError()
+        return u
+
+    model_config = ConfigDict(str_strip_whitespace=True, extra='forbid')
 
 
 class UserReadV1(UserBaseV1):

@@ -61,6 +61,22 @@ class PostUpdateV1(BaseModel):
     visibility: Optional[str] = VisibilityEnum.PUBLIC
     content: Optional[str] = None
 
+    @field_validator('visibility', mode='after')
+    @classmethod
+    def get_visibility_enum(cls, v: str):
+        visibility = None
+        if v.lower() == VisibilityEnum.PUBLIC.value:
+            visibility = VisibilityEnum.PUBLIC
+        elif v.lower() == VisibilityEnum.FOLLOWERS.value:
+            visibility = VisibilityEnum.FOLLOWERS
+        elif v.lower() == VisibilityEnum.PRIVATE.value:
+            visibility = VisibilityEnum.PRIVATE
+        else:
+            raise PostVisibilityError()
+        return visibility
+
+    model_config = ConfigDict(str_strip_whitespace=True, extra='forbid')
+
 
 class PostReadBaseV1(PostBaseV1):
     id: UUID

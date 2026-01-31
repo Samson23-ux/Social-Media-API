@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 import sentry_sdk
 from uuid import UUID
@@ -9,7 +8,6 @@ from sentry_sdk import logger as sentry_logger
 from app.models.users import User
 from app.core.config import settings
 from app.core.exceptions import ServerError
-from app.api.v1.schemas.users import UserRole
 from app.models.images import Image, PostImage
 from app.utils import write_file, validate_image
 from app.api.v1.schemas.images import ImageReadV1
@@ -17,9 +15,9 @@ from app.core.security import validate_refresh_token
 from app.api.v1.repositories.post_repo import post_repo_v1
 from app.models.posts import Post, Comment, Like, CommentLike
 from app.core.exceptions import (
-    ImageUploadError,
-    InvalidImageError,
+    PostUploadError,
     PostNotFoundError,
+    InvalidImageError,
     PostsNotFoundError,
     AuthorizationError,
     CommentNotFoundError,
@@ -94,7 +92,6 @@ class PostServiceV1:
         refresh_token: str,
         db: Session,
         q: str,
-        created_at: int | None = None,
         sort: str | None = None,
         order: str | None = None,
         offset: int = 0,
@@ -104,7 +101,7 @@ class PostServiceV1:
 
         try:
             posts_db: list = post_repo_v1.get_search_posts(
-                user.id, db, q, created_at, sort, order, offset, limit
+                user.id, db, q, sort, order, offset, limit
             )
 
             if not posts_db:
@@ -167,19 +164,41 @@ class PostServiceV1:
                 user.id, db, offset, limit
             )
 
+            if not posts_db:
+                raise PostsNotFoundError()
+
             posts: list[PostReadV1] = []
             for post_db in posts_db:
-                post: PostReadV1 = PostReadV1(
-                    **PostReadBaseV1.model_validate(post_db).model_dump(),
-                    display_name=user.display_name,
-                    username=user.username,
-                    likes=len(post_db.likes),
-                    comments=len(post_db.comments),
+                (
+                    id,
+                    title,
+                    content,
+                    visibility,
+                    created_at,
+                    display_name,
+                    username
+                ) = post_db
+
+                post: Post = post_repo_v1.get_post_by_id(id, db)
+
+                post_read = PostReadV1(
+                    id=id,
+                    title=title,
+                    content=content,
+                    visibility=visibility,
+                    created_at=created_at,
+                    display_name=display_name,
+                    username=username,
+                    comments=len(post.comments),
+                    likes=len(post.likes),
                 )
-                posts.append(post)
-                sentry_logger.info('Following posts retrieved from database')
-                return posts
+                posts.append(post_read)
+            sentry_logger.info('Following posts retrieved from database')
+            return posts
         except Exception as e:
+            if isinstance(e, PostsNotFoundError):
+                raise PostsNotFoundError()
+
             sentry_sdk.capture_exception(e)
             sentry_logger.error(
                 'Internal server error occured while retrieving posts from database'
@@ -231,6 +250,8 @@ class PostServiceV1:
             sentry_logger.info('Post {id} retrieved from database', id=post_id)
             return post_comments
         except Exception as e:
+            if isinstance(e, CommentsNotFoundError):
+                raise CommentsNotFoundError()
             sentry_sdk.capture_exception(e)
             sentry_logger.error(
                 'Internal server error occured while retrieving post {id} comments from database',
@@ -289,7 +310,7 @@ class PostServiceV1:
                 )
                 raise PostImageNotFoundError()
 
-            image_path = Path(settings.PROFILE_IMAGE_PATH).resolve()
+            image_path = Path(settings.POST_IMAGE_PATH).resolve()
             image_url: str = f'{image_path}\\{image_url}'
             return image_url
         except Exception as e:
@@ -426,11 +447,11 @@ class PostServiceV1:
                 raise InvalidImageError()
 
         # restricts a user from uploading 0 or more than 2 images
-        if len(image_uploads) < 1 or len(image_uploads) > 2:
+        if len(image_uploads) < 1:
             sentry_logger.error(
-                'User {id} uploaded zero or more than two images', id=user.id
+                'User {id} uploaded zero images', id=user.id
             )
-            raise ImageUploadError()
+            raise PostUploadError()
 
         post_db: Post = post_repo_v1.get_post_by_id(post_id, db)
 
@@ -453,7 +474,7 @@ class PostServiceV1:
                     post_repo_v1.create_post_image(post_image, db)
                 else:
                     '''create image and post image'''
-                    image_path = Path(settings.PROFILE_IMAGE_PATH).resolve()
+                    image_path = Path(settings.POST_IMAGE_PATH).resolve()
                     filepath: str = f'{str(image_path)}\\{image.filename}'
                     await write_file(filepath, image)
 
@@ -483,15 +504,15 @@ class PostServiceV1:
     def like_post(user: User, post_id: UUID, refresh_token: str, db: Session):
         _ = validate_refresh_token(refresh_token, db)
 
-        # prevents double likes from increasing post likes count
-        if post_repo_v1.get_like(user.id, post_id, db):
-            return
-
         post_db: Post = post_repo_v1.get_post_by_id(post_id, db)
 
         if not post_db:
             sentry_logger.error('Post {id} not found', id=post_id)
             raise PostNotFoundError()
+        
+        # prevents double likes from increasing post likes count
+        if post_repo_v1.get_like(user.id, post_id, db):
+            return
 
         try:
             like: Like = Like(user_id=user.id, post_id=post_id)
@@ -518,15 +539,21 @@ class PostServiceV1:
     ):
         _ = validate_refresh_token(refresh_token, db)
 
-        # prevents double likes from increasing comment likes count
-        if post_repo_v1.get_comment_like(user.id, comment_id, db):
-            return
-
         post_db: Post = post_repo_v1.get_post_by_id(post_id, db)
 
         if not post_db:
             sentry_logger.error('Post {id} not found', id=post_id)
             raise PostNotFoundError()
+
+        comment_db: Comment | None = post_repo_v1.get_comment_by_id(comment_id, db)
+
+        if not comment_db:
+            sentry_logger.error('Comment {id} not found', id=comment_id)
+            raise CommentNotFoundError()
+
+        # prevents double likes from increasing comment likes count
+        if post_repo_v1.get_comment_like(user.id, comment_id, db):
+            return
 
         try:
             like: CommentLike = CommentLike(user_id=user.id, comment_id=comment_id)
@@ -538,6 +565,7 @@ class PostServiceV1:
                 username=user.username,
             )
         except Exception as e:
+            print(e)
             db.rollback()
             sentry_sdk.capture_exception(e)
             sentry_logger.error(
@@ -592,17 +620,19 @@ class PostServiceV1:
     @staticmethod
     def unlike_post(user: User, post_id: UUID, refresh_token: str, db: Session):
         _ = validate_refresh_token(refresh_token, db)
-        like: Like | None = post_repo_v1.get_like(user.id, post_id, db)
-
-        # prevents user from unliking post twice
-        if not like:
-            return
 
         post_db: Post = post_repo_v1.get_post_by_id(post_id, db)
 
         if not post_db:
             sentry_logger.error('Post {id} not found', id=post_id)
             raise PostNotFoundError()
+        
+        like: Like | None = post_repo_v1.get_like(user.id, post_id, db)
+        
+        # prevents user from unliking post twice
+        if not like:
+            return
+
         try:
             post_repo_v1.unlike_post(post_db, like, db)
             db.commit()
@@ -630,10 +660,6 @@ class PostServiceV1:
             user.id, comment_id, db
         )
 
-        # prevents user from unliking comment twice
-        if not comment_like:
-            return
-
         post_db: Post = post_repo_v1.get_post_by_id(post_id, db)
 
         if not post_db:
@@ -645,6 +671,10 @@ class PostServiceV1:
         if not comment_db:
             sentry_logger.error('Comment {id} not found', id=comment_id)
             raise CommentNotFoundError()
+        
+        # prevents user from unliking comment twice
+        if not comment_like:
+            return
 
         try:
             post_repo_v1.unlike_comment(comment_db, comment_like, db)
@@ -673,17 +703,11 @@ class PostServiceV1:
             raise PostNotFoundError()
 
         try:
-            if post_db.user_id == user.id or user.role == UserRole.ADMIN:
-                post_repo_v1.delete_post(post_db, db)
-                db.commit()
-                sentry_logger.info('Post {id} deleted from database', id=post_id)
-            else:
-                raise AuthorizationError()
+            post_repo_v1.delete_post(post_db, db)
+            db.commit()
+            sentry_logger.info('Post {id} deleted from database', id=post_id)
         except Exception as e:
             db.rollback()
-            if isinstance(e, AuthorizationError):
-                raise AuthorizationError()
-
             sentry_sdk.capture_exception(e)
             sentry_logger.error(
                 'Internal server error occured while deleting post {id} from database',
@@ -692,8 +716,14 @@ class PostServiceV1:
             raise ServerError() from e
 
     @staticmethod
-    def delete_comment(comment_id: UUID, refresh_token: str, db: Session):
+    def delete_comment(post_id: UUID ,comment_id: UUID, refresh_token: str, db: Session):
         _ = validate_refresh_token(refresh_token, db)
+
+        post_db: Post = post_repo_v1.get_post_by_id(post_id, db)
+
+        if not post_db:
+            sentry_logger.error('Post {id} not found', id=post_id)
+            raise PostNotFoundError()
 
         comment_db: Comment = post_repo_v1.get_comment_by_id(comment_id, db)
 
@@ -707,9 +737,6 @@ class PostServiceV1:
             sentry_logger.info('Comment {id} deleted from database', id=comment_id)
         except Exception as e:
             db.rollback()
-            if isinstance(e, AuthorizationError):
-                raise AuthorizationError()
-
             sentry_sdk.capture_exception(e)
             sentry_logger.error(
                 'Internal server error occured while deleting comment {id} from database',
@@ -738,12 +765,6 @@ class PostServiceV1:
         try:
             post_repo_v1.delete_post_image(post_image, db)
             db.commit()
-            path: Path = Path(settings.POST_IMAGE_PATH).resolve()
-            file_path: str = f'{str(path)}\\{image_url}'
-
-            if os.path.exists():
-                os.remove(file_path)
-
             sentry_logger.info('Post image deleted')
         except Exception as e:
             db.rollback()

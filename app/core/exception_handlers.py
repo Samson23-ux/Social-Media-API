@@ -10,7 +10,10 @@ from app.core.exceptions import (
     CredentialError,
     RoleExistsError,
     UserExistsError,
-    ImageUploadError,
+    UserFollowError,
+    PostUploadError,
+    AvatarUploadError,
+    UserUnfollowError,
     UserNotFoundError,
     PostNotFoundError,
     InvalidImageError,
@@ -146,12 +149,25 @@ app.add_exception_handler(
 
 
 app.add_exception_handler(
-    exc_class_or_status_code=ImageUploadError,
+    exc_class_or_status_code=AvatarUploadError,
     handler=create_exception_handler(
         status_code=400,
         initial_detail={
             'error_code': 'Image upload error',
             'message': f'A minimum of {min_profile_image} and maximum of {max_profile_image} are allowed',
+            'timestamp': error_time,
+        },
+    ),
+)
+
+
+app.add_exception_handler(
+    exc_class_or_status_code=PostUploadError,
+    handler=create_exception_handler(
+        status_code=400,
+        initial_detail={
+            'error_code': 'Image upload error',
+            'message': f'A minimum of {min_profile_image} is required',
             'timestamp': error_time,
         },
     ),
@@ -318,6 +334,30 @@ app.add_exception_handler(
             'error_code': 'Invalid image uploaded',
             'message': 'User uploaded an invalid image format',
             'resolution': 'Check that the file type uploaded is an image',
+            'timestamp': error_time,
+        },
+    ),
+)
+
+app.add_exception_handler(
+    exc_class_or_status_code=UserFollowError,
+    handler=create_exception_handler(
+        status_code=400,
+        initial_detail={
+            'error_code': 'Follow Error',
+            'message': 'User cannot follow themselves',
+            'timestamp': error_time,
+        },
+    ),
+)
+
+app.add_exception_handler(
+    exc_class_or_status_code=UserUnfollowError,
+    handler=create_exception_handler(
+        status_code=400,
+        initial_detail={
+            'error_code': 'Unfollow Error',
+            'message': 'User cannot unfollow themselves',
             'timestamp': error_time,
         },
     ),

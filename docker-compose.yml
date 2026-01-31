@@ -4,12 +4,12 @@ services:
   postgres_api_db:
     image: postgres:18
     restart: always
-    enviroment:
+    environment:
       - POSTGRES_DB=${API_DB}
       - POSTGRES_USER=${API_DB_USER}
       - POSTGRES_PASSWORD=${API_DB_PASSWORD}
     ports:
-      "5432:5432"
+      - "5432:5432"
     container_name: postgres_api_db
     volumes:
       - api_postgres_db:/var/lib/postgresql/
@@ -17,12 +17,12 @@ services:
   postgres_test_db:
     image: postgres:18
     restart: always
-    enviroment:
+    environment:
       - POSTGRES_DB=${TEST_DB}
       - POSTGRES_USER=${TEST_DB_USER}
       - POSTGRES_PASSWORD=${TEST_DB_PASSWORD}
     ports:
-      "5433:5432"
+      - "5433:5432"
     container_name: postgres_test_db
     volumes:
       - test_postgres_db:/var/lib/postgresql/
@@ -43,7 +43,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: Celery -A schedules.celery_app worker -l INFO -P gevent
+    command: python -m celery -A app.schedules.celery_app worker -l info -P gevent
     container_name: app_celery_worker
     volumes:
       - .:/app
@@ -54,7 +54,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: Celery -A schedules.celery_app beat -l INFO
+    command: python -m celery -A app.schedules.celery_app beat -l info
     container_name: app_celery_beat
     volumes:
       - .:/app
@@ -67,7 +67,7 @@ services:
       dockerfile: Dockerfile
     env_file: .env
     ports:
-      "8000:8000"
+      - "8000:8000"
     container_name: api
     volumes:
       - .:/app
@@ -76,5 +76,5 @@ services:
 
 
 volumes:
-  api_postgres_db
-  test_postgres_db
+  api_postgres_db:
+  test_postgres_db:

@@ -34,7 +34,6 @@ users_router_v1 = APIRouter()
 async def get_users(
     request: Request,
     nationality: str = Query(default=None, description='Filter by nationality'),
-    year: int = Query(default=None, description='Filter by year joined'),
     sort: str = Query(
         default=None,
         description='Sort users by username, display_name, nationality, created_at',
@@ -47,7 +46,7 @@ async def get_users(
 ):
     refresh_token: str | None = request.cookies.get('refresh_token')
     users: list[UserReadV1] = user_service_v1.get_users(
-        user, db, refresh_token, nationality, year, sort, order, offset, limit
+        user, db, refresh_token, nationality, sort, order, offset, limit
     )
     return UserResponseV1(message='Users retrieved successfully', data=users)
 
@@ -62,7 +61,6 @@ async def search_users(
     request: Request,
     q: str = Query(..., description='Search users by username or display_name'),
     nationality: str = Query(default=None, description='Filter by nationality'),
-    year: int = Query(default=None, description='Filter by year joined'),
     sort: str = Query(
         default=None,
         description='Sort users by username, display_name, nationality, created_at',
@@ -75,7 +73,7 @@ async def search_users(
 ):
     refresh_token: str | None = request.cookies.get('refresh_token')
     users: list[UserReadV1] = user_service_v1.search_users(
-        db, refresh_token, q, nationality, year, sort, order, offset, limit
+        db, refresh_token, q, nationality, sort, order, offset, limit
     )
     return UserResponseV1(message='Searched users retrieved successfully', data=users)
 
@@ -109,7 +107,6 @@ async def get_profile(
 async def get_user_posts(
     request: Request,
     username: str,
-    created_at: int = Query(default=None, description='Filter by year created'),
     sort: str = Query(
         default=None,
         description='Sort posts by created_at',
@@ -122,7 +119,7 @@ async def get_user_posts(
 ):
     refresh_token: str | None = request.cookies.get('refresh_token')
     user_posts: list[PostReadV1] = user_service_v1.get_user_posts(
-        user, username, refresh_token, db, created_at, sort, order, offset, limit
+        user, username, refresh_token, db, sort, order, offset, limit
     )
     return PostResponseV1(message='Posts retrieved successfully', data=user_posts)
 
@@ -195,7 +192,6 @@ async def get_followings(
 async def get_user_comments(
     username: str,
     request: Request,
-    created_at: int = Query(default=None, description='Filter by year created'),
     sort: str = Query(
         default=None,
         description='Sort comments by created_at',
@@ -208,7 +204,7 @@ async def get_user_comments(
 ):
     refresh_token: str | None = request.cookies.get('refresh_token')
     comments: list[CommentReadV1] = user_service_v1.get_user_comments(
-        user, username, refresh_token, db, created_at, sort, order, offset, limit
+        user, username, refresh_token, db, sort, order, offset, limit
     )
     return CommentResponseV1(
         message='User comments retrieved successfully', data=comments

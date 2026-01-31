@@ -425,7 +425,7 @@ def test_get_post_image(create_role, create_post, test_client):
     assert res.status_code == 200
     assert res.headers['content-type'].startswith('image')
 
-    image_path: Path = Path(settings.PROFILE_IMAGE_PATH) / '20240811_012037.jpg'
+    image_path: Path = Path(settings.POST_IMAGE_PATH) / '20240811_012037.jpg'
 
     assert image_path.exists()
     image_path.unlink()
@@ -455,7 +455,7 @@ def test_create_post_image(create_role, create_post, test_client):
     assert res.status_code == 201
     assert '20240811_012037.jpg' in res.json()['data']['image_url']
 
-    image_path: Path = Path(settings.PROFILE_IMAGE_PATH) / '20240811_012037.jpg'
+    image_path: Path = Path(settings.POST_IMAGE_PATH) / '20240811_012037.jpg'
 
     assert image_path.exists()
     image_path.unlink()

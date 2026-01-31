@@ -1,4 +1,3 @@
-import os
 import sentry_sdk
 from uuid import UUID
 from pathlib import Path
@@ -29,9 +28,11 @@ from app.core.exceptions import (
     ServerError,
     RoleExistsError,
     UserExistsError,
-    ImageUploadError,
+    UserFollowError,
+    AvatarUploadError,
     UserNotFoundError,
     InvalidImageError,
+    UserUnfollowError,
     UsersNotFoundError,
     PostsNotFoundError,
     AvatarNotFoundError,
@@ -49,7 +50,6 @@ class UserServiceV1:
         db: Session,
         refresh_token: str,
         nationality: str | None = None,
-        year: int | None = None,
         sort: str | None = None,
         order: str | None = None,
         offset: int = 0,
@@ -59,7 +59,7 @@ class UserServiceV1:
 
         try:
             users_db: list[User] = user_repo_v1.get_users(
-                user.id, db, nationality, year, sort, order, offset, limit
+                user.id, db, nationality, sort, order, offset, limit
             )
             if not users_db:
                 sentry_logger.error('Users not found in database')
@@ -87,7 +87,6 @@ class UserServiceV1:
         refresh_token: str,
         q: str,
         nationality: str | None = None,
-        year: int | None = None,
         sort: str | None = None,
         order: str | None = None,
         offset: int = 0,
@@ -97,7 +96,7 @@ class UserServiceV1:
 
         try:
             users_db: list[User] = user_repo_v1.search_users(
-                db, q, nationality, year, sort, order, offset, limit
+                db, q, nationality, sort, order, offset, limit
             )
             if not users_db:
                 sentry_logger.error('Searched users not found in database')
@@ -112,7 +111,7 @@ class UserServiceV1:
             return users
         except Exception as e:
             '''raises the exceptions instead of 500 internal server error'''
-            if isinstance(e, UserNotFoundError):
+            if isinstance(e, UsersNotFoundError):
                 raise UsersNotFoundError()
 
             sentry_sdk.capture_exception(e)
@@ -318,7 +317,6 @@ class UserServiceV1:
         username: str,
         refresh_token: str,
         db: Session,
-        created_at: int | None = None,
         sort: str | None = None,
         order: str | None = None,
         offset: int = 0,
@@ -333,7 +331,7 @@ class UserServiceV1:
                 '''select all posts made by the current logged in user'''
 
                 posts_db: list = user_repo_v1.get_current_user_posts(
-                    user_id, db, created_at, sort, order, offset, limit
+                    user_id, db, sort, order, offset, limit
                 )
             else:
                 '''select all posts by the user with the provided username
@@ -350,15 +348,7 @@ class UserServiceV1:
                 user_id = user.id
 
                 posts_db: list = user_repo_v1.get_user_posts(
-                    current_user,
-                    user,
-                    user_id,
-                    db,
-                    created_at,
-                    sort,
-                    order,
-                    offset,
-                    limit,
+                    current_user, user, user_id, db, sort, order, offset, limit,
                 )
 
             if not posts_db:
@@ -494,7 +484,6 @@ class UserServiceV1:
         username: str,
         refresh_token: str,
         db: Session,
-        created_at: int | None = None,
         sort: str | None = None,
         order: str | None = None,
         offset: int = 0,
@@ -509,7 +498,7 @@ class UserServiceV1:
             if current_user.username == username:
                 '''get current user's comments'''
                 comments: list = user_repo_v1.get_user_comments(
-                    current_user.id, db, created_at, sort, order, offset, limit
+                    current_user.id, db, sort, order, offset, limit
                 )
             else:
                 '''get other user's comments'''
@@ -523,7 +512,7 @@ class UserServiceV1:
                 user_id = user.id
 
                 comments: list = user_repo_v1.get_user_comments(
-                    current_user.id, db, created_at, sort, order, offset, limit
+                    user.id, db, sort, order, offset, limit
                 )
 
             if not comments:
@@ -634,9 +623,12 @@ class UserServiceV1:
             )
             raise UserNotFoundError()
 
-        '''ensure idempotency by checking if the current user is already
-        following user or simply just return if a user tries to follow themselves'''
-        if user in current_user.following or current_user.username == username:
+        '''prevents users from following themselves'''
+        if current_user.username == username:
+            raise UserFollowError()
+
+        '''ensures idempotency by checking if the current user is already following user'''
+        if user in current_user.following:
             return
 
         try:
@@ -705,7 +697,7 @@ class UserServiceV1:
             sentry_logger.error(
                 'User {id} uploaded zero or more than two images', id=user.id
             )
-            raise ImageUploadError()
+            raise AvatarUploadError()
 
         user_images: list[ProfileImage] = user_repo_v1.get_user_images(user)
 
@@ -810,7 +802,12 @@ class UserServiceV1:
             )
             raise UserNotFoundError()
 
-        if current_user.username == username or user not in current_user.following:
+        '''prevents users from unfollowing themselves'''
+        if current_user.username == username:
+            raise UserUnfollowError()
+
+        '''ensures idempotency by checking if the current user is already not following user'''
+        if user not in current_user.following:
             return
 
         try:
@@ -869,11 +866,6 @@ class UserServiceV1:
         try:
             user_repo_v1.delete_profile_image(profile_image, db)
             db.commit()
-            path: Path = Path(settings.PROFILE_IMAGE_PATH).resolve()
-            file_path: str = f'{str(path)}\\{image_url}'
-
-            if os.path.exists():
-                os.remove(file_path)
 
             sentry_logger.info('Profile image deleted')
         except Exception as e:

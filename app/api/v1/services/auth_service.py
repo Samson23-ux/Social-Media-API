@@ -244,6 +244,10 @@ class AuthServiceV1:
         # check if refresh token is valid
         refresh_token_db: RefreshToken = validate_refresh_token(refresh_token, db)
 
+        if not verify_password(curr_password, user.hash_password):
+            sentry_logger.error('Incorrect password')
+            raise PasswordError()
+
         token_db = AuthServiceV1.revoke_refresh_token(refresh_token_db)
 
         try:
@@ -260,10 +264,6 @@ class AuthServiceV1:
                 id=refresh_token_db.id,
             )
             raise ServerError() from e
-
-        if not verify_password(curr_password, user.hash_password):
-            sentry_logger.error('Incorrect password')
-            raise PasswordError()
 
         user.hash_password = hash_password(new_password)
 
@@ -344,6 +344,10 @@ class AuthServiceV1:
         # check if refresh token is valid
         refresh_token_db: RefreshToken = validate_refresh_token(refresh_token, db)
 
+        if not verify_password(password, user.hash_password):
+            sentry_logger.error('Incorrect password')
+            raise PasswordError()
+
         AuthServiceV1.revoke_refresh_token(refresh_token_db)
 
         try:
@@ -361,9 +365,6 @@ class AuthServiceV1:
             )
             raise ServerError() from e
 
-        if not verify_password(password, user.hash_password):
-            sentry_logger.error('Incorrect password')
-            raise PasswordError()
 
         user.is_delete = True
         user.deleted_at = datetime.now(timezone.utc)
@@ -386,6 +387,10 @@ class AuthServiceV1:
         '''delete account permanently'''
         refresh_token_db = validate_refresh_token(refresh_token, db)
 
+        if not verify_password(password, user.hash_password):
+            sentry_logger.error('Incorrect password')
+            raise PasswordError()
+
         AuthServiceV1.revoke_refresh_token(refresh_token_db)
 
         try:
@@ -402,10 +407,6 @@ class AuthServiceV1:
                 id=refresh_token_db.id,
             )
             raise ServerError() from e
-
-        if not verify_password(password, user.hash_password):
-            sentry_logger.error('Incorrect password')
-            raise PasswordError()
 
         try:
             user_repo_v1.delete_user_account(user, db)

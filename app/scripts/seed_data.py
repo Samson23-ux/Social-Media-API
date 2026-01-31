@@ -1,8 +1,15 @@
-from app.dependencies import get_db
+from sqlalchemy.orm import sessionmaker, Session
+
+from app.database.session import db_engine
 from app.core.config import settings
 from app.api.v1.services.auth_service import user_service_v1
 from app.api.v1.services.auth_service import auth_service_v1
 from app.api.v1.schemas.users import UserCreateV1, RoleCreateV1
+
+
+SessionLocal: Session = sessionmaker(
+    autoflush=False, autocommit=False, bind=db_engine, expire_on_commit=False
+)
 
 
 # seed dB with roles
@@ -10,13 +17,9 @@ def create_roles():
     admin_role = RoleCreateV1(name='admin')
     user_role = RoleCreateV1(name='user')
 
-    db_gen = get_db()
-    db = next(db_gen)
-    try:
+    with SessionLocal() as db:
         user_service_v1.create_role(admin_role, db)
         user_service_v1.create_role(user_role, db)
-    finally:
-        db.close()
 
 
 # create a first and core admin user
@@ -28,15 +31,11 @@ def create_admin_user():
         password=settings.ADMIN_PASSWORD,
         dob=settings.ADMIN_DOB,
         nationality=settings.ADMIN_NATIONALITY,
-        bio=settings.ADMIN_BIO
+        bio=settings.ADMIN_BIO,
     )
 
-    db_gen = get_db()
-    db = next(db_gen)
-    try:
+    with SessionLocal() as db:
         auth_service_v1.sign_up(user_create, db, admin=True)
-    finally:
-        db.close()
 
 
 if __name__ == '__main__':

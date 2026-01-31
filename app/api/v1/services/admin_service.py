@@ -135,8 +135,8 @@ class AdminServiceV1:
         user_db: User = admin_repo_v1.get_suspended_user(role_id, username, db)
 
         if not user_db:
-                sentry_logger.error('Suspended user not found')
-                raise UserNotFoundError()
+            sentry_logger.error('Suspended user not found')
+            raise UserNotFoundError()
 
         try:
             user_db.is_suspended = False
@@ -150,9 +150,6 @@ class AdminServiceV1:
             )
             return user
         except Exception as e:
-            if isinstance(e, UserNotFoundError):
-                raise UserNotFoundError()
-
             db.rollback()
             sentry_sdk.capture_exception(e)
             sentry_logger.error(

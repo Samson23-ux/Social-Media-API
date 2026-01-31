@@ -72,7 +72,6 @@ async def get_following_posts(
 async def get_search_posts(
     request: Request,
     q: str = Query(..., description='Search posts by title or using words in contents'),
-    created_at: int = Query(default=None, description='Filter by year created'),
     sort: str = Query(default=None, description='Sort by likes'),
     order: str = Query(default=None, description='Sort in asc or desc order'),
     offset: int = Query(default=0),
@@ -82,7 +81,7 @@ async def get_search_posts(
 ):
     refresh_token: str | None = request.cookies.get('refresh_token')
     search_posts: list[PostReadV1] = post_service_v1.get_search_posts(
-        user, refresh_token, db, q, created_at, sort, order, offset, limit
+        user, refresh_token, db, q, sort, order, offset, limit
     )
     return PostResponseV1(message='Posts retrieved successfully', data=search_posts)
 
@@ -336,13 +335,14 @@ async def delete_post(
     description='Delete comment from a post',
 )
 async def delete_comment(
+    post_id: UUID,
     comment_id: UUID,
     request: Request,
     _ = Depends(required_roles([UserRole.USER, UserRole.ADMIN])),
     db: Session = Depends(get_db),
 ):
     refresh_token: str | None = request.cookies.get('refresh_token')
-    post_service_v1.delete_comment(comment_id, refresh_token, db)
+    post_service_v1.delete_comment(post_id, comment_id, refresh_token, db)
 
 
 @post_router_v1.delete(

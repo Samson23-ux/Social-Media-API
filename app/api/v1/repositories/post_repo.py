@@ -1,6 +1,6 @@
 from uuid import UUID
 from sqlalchemy.orm import Session
-from sqlalchemy import select, and_, desc, func, or_, case
+from sqlalchemy import select, and_, desc, func, or_
 
 from app.models.users import User
 from app.models.users import follows
@@ -59,7 +59,6 @@ class PostRepoV1:
         user_id: UUID,
         db: Session,
         q: str,
-        created_at: int | None = None,
         sort: str | None = None,
         order: str | None = None,
         offset: int = 0,
@@ -97,14 +96,11 @@ class PostRepoV1:
                     Post.visibility == VisibilityEnum.PUBLIC,
                     and_(
                         Post.visibility == VisibilityEnum.FOLLOWERS,
-                        follows.c.follower_id.is_not(None)
+                        follows.c.follower_id.is_not(None),
                     ),
                 )
             )
         )
-
-        if created_at:
-            stmt = stmt.where(Post.created_at == created_at)
 
         if sort:
             if order == 'desc':
@@ -126,7 +122,17 @@ class PostRepoV1:
         limit: int = 10,
     ) -> list[Post]:
         stmt = (
-            select(Post)
+            select(
+                Post.id,
+                Post.title,
+                Post.content,
+                Post.visibility,
+                Post.created_at,
+                User.display_name,
+                User.username,
+            )
+            .select_from(Post)
+            .join(User, Post.user_id == User.id)
             .join(
                 follows,
                 and_(
@@ -138,7 +144,7 @@ class PostRepoV1:
         )
 
         stmt = stmt.offset(offset).limit(limit)
-        following_posts: list[Post] = db.execute(stmt).scalars()
+        following_posts: list[Post] = db.execute(stmt).all()
         return following_posts
 
     @staticmethod
@@ -187,19 +193,17 @@ class PostRepoV1:
         limit: int = 10,
     ) -> list:
         sortable_fields: list = ['created_at', 'likes']
-        stmt = select(Comment.id, Comment.content, Comment.created_at).join(
-            Post, post_id == Comment.post_id
-        )
-
         stmt = (
-            stmt.add_columns(
-                case(
-                    (CommentLike.comment_id.is_(None), 0),
-                    else_=func.count(CommentLike.user_id),
-                ).label('likes')
+            select(
+                Comment.id,
+                Comment.content,
+                Comment.created_at,
+                func.count(CommentLike.user_id).label('likes'),
             )
+            .join(Post, Post.id == Comment.post_id)
             .outerjoin(CommentLike, Comment.id == CommentLike.comment_id)
-            .group_by(Comment.id, CommentLike.comment_id)
+            .where(Post.id == post_id)
+            .group_by(Comment.id)
         )
 
         if sort not in sortable_fields or sort == 'created_at':

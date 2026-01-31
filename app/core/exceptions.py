@@ -54,8 +54,13 @@ class RoleExistsError(AppException):
 
     pass
 
-class ImageUploadError(AppException):
-    '''Min and Max file not met'''
+class AvatarUploadError(AppException):
+    '''Min and Max image not met'''
+
+    pass
+
+class PostUploadError(AppException):
+    '''Min image not met'''
 
     pass
 
@@ -117,7 +122,18 @@ class PostImageNotFoundError(AppException):
 class InvalidImageError(AppException):
     '''inavlid image uploaded'''
 
+    pass
 
+
+class UserFollowError(AppException):
+    '''attempt to follow same account'''
+
+    pass
+
+class UserUnfollowError(AppException):
+    '''attempt to unfollow same account'''
+
+    pass
 
 
 def create_exception_handler(

@@ -16,7 +16,6 @@ class UserRepoV1:
         user_id: UUID,
         db: Session,
         nationality: str | None = None,
-        year: int | None = None,
         sort: str | None = None,
         order: str | None = None,
         offset: int = 0,
@@ -45,9 +44,6 @@ class UserRepoV1:
         if nationality:
             stmt = stmt.where(func.lower(User.nationality) == func.lower(nationality))
 
-        if year:
-            stmt = stmt.where(User.dob.year == year)
-
         if sort:
             if order == 'desc':
                 stmt = stmt.order_by(desc(sortable_fields.get(sort, User.created_at)))
@@ -64,7 +60,6 @@ class UserRepoV1:
         db: Session,
         q: str,
         nationality: str | None = None,
-        year: int | None = None,
         sort: str | None = None,
         order: str | None = None,
         offset: int = 0,
@@ -93,9 +88,6 @@ class UserRepoV1:
 
         if nationality:
             stmt = stmt.where(func.lower(User.nationality) == func.lower(nationality))
-
-        if year:
-            stmt = stmt.where(User.dob.year == year)
 
         if sort:
             if order == 'desc':
@@ -168,7 +160,6 @@ class UserRepoV1:
     def get_current_user_posts(
         user_id: UUID,
         db: Session,
-        created_at: int | None = None,
         sort: str | None = None,
         order: str | None = None,
         offset: int = 0,
@@ -177,19 +168,19 @@ class UserRepoV1:
         '''select current user's posts and handle sorting by likes and comments'''
 
         sortable_fields: dict = {'created_at': Post.created_at}
-        stmt = select(
-            Post.id,
-            Post.title,
-            Post.content,
-            Post.visibility,
-            Post.created_at,
-            User.display_name,
-            User.username,
-        ).join(User, Post.user_id == user_id)
-
-        # filter by date created if set
-        if created_at:
-            stmt = stmt.where(Post.created_at.year == created_at)
+        stmt = (
+            select(
+                Post.id,
+                Post.title,
+                Post.content,
+                Post.visibility,
+                Post.created_at,
+                User.display_name,
+                User.username,
+            )
+            .join(User, Post.user_id == User.id)
+            .where(User.id == user_id)
+        )
 
         if sort:
             if order == 'desc':
@@ -209,7 +200,6 @@ class UserRepoV1:
         user: User,
         user_id: UUID,
         db: Session,
-        created_at: int | None = None,
         sort: str | None = None,
         order: str | None = None,
         offset: int = 0,
@@ -232,11 +222,14 @@ class UserRepoV1:
                     User.display_name,
                     User.username,
                 )
-                .join(User, Post.user_id == user_id)
+                .join(User, Post.user_id == User.id)
                 .where(
-                    or_(
-                        Post.visibility == VisibilityEnum.PUBLIC,
-                        Post.visibility == VisibilityEnum.FOLLOWERS,
+                    and_(
+                        or_(
+                            Post.visibility == VisibilityEnum.PUBLIC,
+                            Post.visibility == VisibilityEnum.FOLLOWERS,
+                        ),
+                        User.id == user_id,
                     )
                 )
             )
@@ -251,17 +244,17 @@ class UserRepoV1:
                     User.display_name,
                     User.username,
                 )
-                .join(User, Post.user_id == user_id)
+                .join(User, Post.user_id == User.id)
                 .where(
-                    or_(
-                        Post.visibility == VisibilityEnum.PUBLIC,
+                    and_(
+                        or_(
+                            Post.visibility == VisibilityEnum.PUBLIC,
+                            Post.visibility == VisibilityEnum.FOLLOWERS,
+                        ),
+                        User.id == user_id,
                     )
                 )
             )
-
-        # same filter and sort process as get current user posts
-        if created_at:
-            stmt = stmt.where(Post.created_at.year == created_at)
 
         if sort:
             if order == 'desc':
@@ -279,32 +272,29 @@ class UserRepoV1:
     def get_user_comments(
         user_id: UUID,
         db: Session,
-        created_at: int | None = None,
         sort: str | None = None,
         order: str | None = None,
         offset: int = 0,
         limit: int = 10,
     ) -> list:
-        sortable_fields: dict = {'created_at': Post.created_at}
+        sortable_fields: dict = {'created_at': Comment.created_at}
         stmt = select(
             Comment.id,
             Comment.content,
             User.display_name,
             User.username,
             Comment.created_at,
-        ).join(User, Comment.user_id == user_id)
-
-        # filter by date created if set
-        if created_at:
-            stmt = stmt.where(Comment.created_at.year == created_at)
+        ).join(User, Comment.user_id == User.id).where(User.id == user_id)
 
         if sort:
             if order == 'desc':
                 stmt = stmt.order_by(
-                    desc(sortable_fields.get('created_at', Post.created_at))
+                    desc(sortable_fields.get('created_at', Comment.created_at))
                 )
             else:
-                stmt = stmt.order_by(sortable_fields.get('created_at', Post.created_at))
+                stmt = stmt.order_by(
+                    sortable_fields.get('created_at', Comment.created_at)
+                )
 
         stmt = stmt.offset(offset).limit(limit)
 
@@ -329,8 +319,9 @@ class UserRepoV1:
                 Post.created_at,
             )
             .select_from(User)
-            .join(Like, Like.user_id == user_id)
+            .join(Like, Like.user_id == User.id)
             .join(Post, Post.id == Like.post_id)
+            .where(User.id == user_id)
             .offset(offset)
             .limit(limit)
         )
