@@ -17,6 +17,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+      start_period: 30s
 
   test_db:
     image: postgres:18
@@ -36,6 +37,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+      start_period: 30s
 
   rabbitmq:
     image: rabbitmq:3-management
@@ -54,6 +56,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+      start_period: 30s
 
   app_celery_worker:
     build:

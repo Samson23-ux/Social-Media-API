@@ -97,15 +97,16 @@ class PostRepoV1:
                         Post.content_search.op('@@')(query_vector)
                     ),
 
-                    and_(
-                        Post.visibility == VisibilityEnum.FOLLOWERS,
-                        follows.c.follower_id.is_not(None),
-                    ),
-
                     or_(
-                    Post.user_id == user_id,
-                    Post.visibility == VisibilityEnum.PUBLIC,
-                ))
+                        Post.user_id == user_id,
+                        Post.visibility == VisibilityEnum.PUBLIC,
+
+                        and_(
+                            Post.visibility == VisibilityEnum.FOLLOWERS,
+                            follows.c.follower_id.is_not(None),
+                        ),
+                    ),
+                )
             ).order_by('vector_rank')
         )
 
