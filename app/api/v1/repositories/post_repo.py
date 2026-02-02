@@ -91,15 +91,22 @@ class PostRepoV1:
                 ),
             )
             .where(
-                or_(
-                    Post.user_id == user_id,
-                    Post.visibility == VisibilityEnum.PUBLIC,
+                and_(
+                    or_(
+                        Post.title.ilike(q),
+                        Post.content_search.op('@@')(query_vector)
+                    ),
+
                     and_(
                         Post.visibility == VisibilityEnum.FOLLOWERS,
                         follows.c.follower_id.is_not(None),
                     ),
-                )
-            )
+
+                    or_(
+                    Post.user_id == user_id,
+                    Post.visibility == VisibilityEnum.PUBLIC,
+                ))
+            ).order_by('vector_rank')
         )
 
         if sort:

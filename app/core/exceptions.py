@@ -1,3 +1,7 @@
+# defer type hint evaluation
+# this converts type hints to string at import time
+from __future__ import annotations
+
 from fastapi.requests import Request
 from fastapi.responses import JSONResponse
 

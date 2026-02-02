@@ -1,6 +1,16 @@
 from datetime import datetime, timezone
 from sqlalchemy.orm import relationship
-from sqlalchemy import Column, VARCHAR, UUID, DateTime, text, Integer, ForeignKey
+from sqlalchemy import (
+    Column,
+    VARCHAR,
+    UUID,
+    DateTime,
+    text,
+    Integer,
+    PrimaryKeyConstraint,
+    Index,
+    ForeignKey,
+)
 
 from app.database.base import Base
 
@@ -8,8 +18,8 @@ from app.database.base import Base
 class Image(Base):
     __tablename__ = 'images'
 
-    id = Column(UUID, default=text('uuid_generate_v4()'), primary_key=True)
-    image_url = Column(VARCHAR(20), nullable=False, index=True)
+    id = Column(UUID, default=text('uuid_generate_v4()'))
+    image_url = Column(VARCHAR(20), nullable=False)
     image_type = Column(VARCHAR(20), nullable=False)
     image_size = Column(Integer, nullable=False)
     created_at = Column(
@@ -32,34 +42,59 @@ class Image(Base):
 
     post_images = relationship('PostImage', back_populates='image', viewonly=True)
 
+    __table_args__ = (
+        PrimaryKeyConstraint('id', name='images_pk'),
+        Index('idx_image_image_url', image_url),
+    )
+
 
 class ProfileImage(Base):
     # holds both avatar and header image urls
     # a user should only appear twice with logic enforced in app layer
     __tablename__ = 'profile_images'
 
-    id = Column(UUID, default=text('uuid_generate_v4()'), primary_key=True)
+    id = Column(UUID, default=text('uuid_generate_v4()'))
     user_id = Column(
-        UUID, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True
+        UUID,
+        ForeignKey('users.id', name='user_id_fk', ondelete='CASCADE'),
+        nullable=False,
     )
     image_id = Column(
-        UUID, ForeignKey('images.id', ondelete='CASCADE'), nullable=False, index=True
+        UUID,
+        ForeignKey('images.id', name='image_id_fk', ondelete='CASCADE'),
+        nullable=False,
     )
 
     user = relationship('User', back_populates='profile_images', viewonly=True)
     image = relationship('Image', back_populates='profile_images', viewonly=True)
 
+    __table_args__ = (
+        PrimaryKeyConstraint('id', name='profile_images_pk'),
+        Index('idx_profile_image_user_id', user_id),
+        Index('idx_profile_image_image_id', image_id),
+    )
+
 
 class PostImage(Base):
     __tablename__ = 'post_images'
 
-    id = Column(UUID, default=text('uuid_generate_v4()'), primary_key=True)
+    id = Column(UUID, default=text('uuid_generate_v4()'))
     post_id = Column(
-        UUID, ForeignKey('posts.id', ondelete='CASCADE'), nullable=False, index=True
+        UUID,
+        ForeignKey('posts.id', name='post_id_fk', ondelete='CASCADE'),
+        nullable=False,
     )
     image_id = Column(
-        UUID, ForeignKey('images.id', ondelete='CASCADE'), nullable=False, index=True
+        UUID,
+        ForeignKey('images.id', name='image_id_fk', ondelete='CASCADE'),
+        nullable=False,
     )
 
     post = relationship('Post', back_populates='post_images', viewonly=True)
     image = relationship('Image', back_populates='post_images', viewonly=True)
+
+    __table_args__ = (
+        PrimaryKeyConstraint('id', name='post_images_pk'),
+        Index('idx_post_image_user_id', post_id),
+        Index('idx_post_image_image_id', image_id),
+    )

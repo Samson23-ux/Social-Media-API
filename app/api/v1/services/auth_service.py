@@ -60,7 +60,7 @@ class AuthServiceV1:
         return refresh_token
 
     @staticmethod
-    def sign_up(user_create: UserCreateV1, db: Session, admin: bool = None) -> User:
+    def sign_up(user_create: UserCreateV1, db: Session) -> User:
         user_with_email: User | None = user_repo_v1.get_user_by_email(
             user_create.email, db
         )
@@ -86,10 +86,7 @@ class AuthServiceV1:
 
         user_in_db: UserInDBV1 = UserInDBV1(**user_create.model_dump())
 
-        if admin:
-            role: Role = user_service_v1.get_role('admin', db)
-        else:
-            role: Role = user_service_v1.get_role(user_in_db.role, db)
+        role: Role = user_service_v1.get_role(user_in_db.role, db)
 
         user: User = User(
             **user_in_db.model_dump(exclude={'role', 'password'}),

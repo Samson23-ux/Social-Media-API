@@ -7,11 +7,13 @@ from app.main import app
 from app.database.base import Base
 from app.dependencies import get_db
 from app.core.config import settings
-
+from app.models.users import Role, User
+from app.core.security import hash_password
 from tests.fake_data import user_create_1, post_create_1
+from app.api.v1.repositories.user_repo import user_repo_v1
 from app.api.v1.services.auth_service import user_service_v1
 from app.api.v1.services.auth_service import auth_service_v1
-from app.api.v1.schemas.users import UserCreateV1, RoleCreateV1
+from app.api.v1.schemas.users import UserCreateV1, RoleCreateV1, UserInDBV1
 
 
 @pytest.fixture(scope='session')
@@ -69,8 +71,17 @@ def create_role(test_db_session):
     user_role = RoleCreateV1(name='user')
 
     db = test_db_session
-    user_service_v1.create_role(admin_role, db)
-    user_service_v1.create_role(user_role, db)
+    admin_role_db: Role | None = user_repo_v1.get_role(admin_role.name, db)
+
+    if not admin_role_db:
+        role_db: Role = Role(name=admin_role.name)
+        user_repo_v1.create_role(role_db, db)
+
+    user_role_db: Role | None = user_repo_v1.get_role(user_role.name, db)
+
+    if not admin_role_db:
+        user_db: Role = Role(name=user_role.name)
+        user_repo_v1.create_role(user_db, db)
 
 
 @pytest.fixture
@@ -86,7 +97,22 @@ def create_admin(test_db_session, create_role):
     )
 
     db = test_db_session
-    auth_service_v1.sign_up(user_create, db, admin=True)
+    user_with_email: User | None = user_repo_v1.get_user_by_email(user_create.email, db)
+    user_with_username: User | None = user_repo_v1.get_user_by_username(user_create.username, db)
+
+    if not user_with_email and not user_with_username:
+        user_create.password = hash_password(user_create.password)
+        user_in_db: UserInDBV1 = UserInDBV1(**user_create.model_dump())
+
+        role: Role = user_repo_v1.get_role('admin', db)
+
+        user: User = User(
+            **user_in_db.model_dump(exclude={'role', 'password'}),
+            role_id=role.id,
+            hash_password=user_create.password
+        )
+
+        user_repo_v1.add_user(user, db)
 
 
 @pytest.fixture

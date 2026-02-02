@@ -650,34 +650,6 @@ class UserServiceV1:
             raise ServerError() from e
 
     @staticmethod
-    def create_role(role_create: RoleCreateV1, db: Session) -> Role:
-        role = user_repo_v1.get_role(role_create.name, db)
-
-        if role:
-            sentry_logger.error('{name} role exists', name=role_create.name)
-            raise RoleExistsError()
-
-        role_db = Role(name=role_create.name)
-
-        try:
-            user_repo_v1.create_role(role_db, db)
-            db.commit()
-            sentry_logger.info('{name} role created', name=role_create.name)
-        except Exception as e:
-            db.rollback()
-            sentry_sdk.capture_exception(e)
-            sentry_logger.error(
-                'Internal server error while creating {name} role',
-                name=role_create.name,
-            )
-            raise ServerError() from e
-        finally:
-            db.close()
-
-        role_out = user_repo_v1.get_role(role_db.name, db)
-        return role_out
-
-    @staticmethod
     async def upload_image(
         refresh_token: str,
         user: User,
