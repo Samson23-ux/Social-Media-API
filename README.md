@@ -28,9 +28,9 @@ This is a mini social media api where users can interact with their favourite us
 #### Users:
 - Create account and view profile with profile images
 - View feed posts from followers and non-followers
-- like and comment on a post
-- follow and unfollow other users
-- view followers and followings
+- Like and comment on a post
+- Follow and unfollow other users
+- View followers and followings
 
 #### Admin:
 - Assign admin role
