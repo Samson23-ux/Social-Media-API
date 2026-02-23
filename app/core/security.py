@@ -63,7 +63,7 @@ def create_refresh_token(
         expiry_time: datetime = datetime.now(timezone.utc) + expire_time
     else:
         expiry_time: datetime = datetime.now(timezone.utc) + timedelta(
-            minutes=settings.REFRESH_TOKEN_EXPIRE_TIME
+            days=settings.REFRESH_TOKEN_EXPIRE_TIME
         )
 
     payload: dict = {
@@ -96,15 +96,15 @@ def decode_token(token: str, key: str) -> dict | None:
 
 
 def validate_refresh_token(refresh_token: str, db: Session) -> RefreshToken:
-    token: dict | None = decode_token(refresh_token, settings.REFRESH_TOKEN_SECRET_KEY)
+    payload: dict | None = decode_token(refresh_token, settings.REFRESH_TOKEN_SECRET_KEY)
 
     # raise authentication error if refresh token has expired
-    if not token:
+    if not payload:
         sentry_logger.error('Error authenticating user. Refresh token not valid')
         raise AuthenticationError()
 
     refresh_token_db: RefreshToken = auth_repo_v1.get_refresh_token(
-        token.get('jti'), db
+        payload.get('jti'), db
     )
 
     if (

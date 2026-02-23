@@ -62,12 +62,17 @@ class UserInDBV1(UserCreateV1):
 
 
 class UserUpdateV1(BaseModel):
-    display_name: Optional[str] = None
+    display_name: Optional[str] = Field(
+        default=None,
+        min_length=6,
+        max_length=20,
+        description='Unique username with @ e.g -> @example_user',
+    )
     username: Optional[str] = None
     email: Optional[EmailStr] = None
     dob: Optional[date] = None
     nationality: Optional[str] = None
-    bio: Optional[str] = None
+    bio: Optional[str] = Field(default=None, max_length=35)
 
     @field_validator('email', mode='after')
     @classmethod

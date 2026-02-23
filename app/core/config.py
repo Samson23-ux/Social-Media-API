@@ -8,9 +8,6 @@ class Settings(BaseSettings):
 
     ENVIROMENT: str
 
-    # Fastapi Port
-    API_PORT: str
-
     # API Info
     API_VERSION: str = '1.0.0'
     API_VERSION_PREFIX: str = '/api/v1'
@@ -21,27 +18,8 @@ class Settings(BaseSettings):
     DATABASE_URL: str
     WORKER_DATABASE_URL: str
 
-    #API DB Credentials
-    API_DB: str
-    API_DB_USER: str
-    API_DB_PASSWORD: str
-    API_DB_PORT: str
-
-    #Test DB Credentials
-    TEST_DB: str
-    TEST_DB_USER: str
-    TEST_DB_PASSWORD: str
-    TEST_DB_PORT: str
-
     # TEST DB URL
     TEST_DATABASE_URL: str
-
-    # Broker Credentials
-    BROKER_USER: str
-    BROKER_PASSWORD: str
-    BROKER_VHOST: str
-    BROKER_PORT: str
-    BROKER_PLUGIN_PORT: str
 
     #Broker URI
     BROKER_URL: str

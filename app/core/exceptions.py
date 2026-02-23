@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fastapi.requests import Request
+from datetime import datetime, timezone
 from fastapi.responses import JSONResponse
 
 
@@ -144,6 +145,8 @@ def create_exception_handler(
     initial_detail: dict, status_code: int
 ) -> callable[[Request, AppException], JSONResponse]:
     def exception_handler(req: Request, exc: AppException) -> JSONResponse:
+        error_time: str = datetime.now(timezone.utc).isoformat()
+        initial_detail["timestamp"] = error_time
         return JSONResponse(content=initial_detail, status_code=status_code)
 
     return exception_handler

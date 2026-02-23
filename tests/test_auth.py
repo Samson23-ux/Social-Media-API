@@ -116,7 +116,7 @@ def test_reactivate_account(create_role, sign_up, test_client):
         },
     )
 
-    tt = test_client.patch(
+    test_client.patch(
         '/api/v1/auth/account/deactivate/',
         data={'password': user_create_1.get('password')},
         headers={'Authorization': f'Bearer {sign_in_res.json()['access_token']}'},

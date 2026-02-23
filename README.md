@@ -1,160 +1,128 @@
-# Project Title
-Mini Social Media API
+# Project Title 🎓
 
-## Description
+**Mini Social Media API**
 
-Provide a brief description of the project, its purpose, and what it aims to achieve.
+---
 
+## Description 📝
+This is a mini social media api where users can interact with their favourite users, upload profile pictures and view posts made by followers and non-followers.
 
-## Features
+---
 
-- List the key features of the project.
-- Highlight what makes it unique or useful.
+## Technology Stack 🛠️
 
-## Ways to run application
-1. Run application locally
+![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)
+![Pydantic](https://img.shields.io/badge/Pydantic-2C3E50?style=for-the-badge&logo=pydantic&logoColor=white)
+![Postgres](https://img.shields.io/badge/Postgres-336791?style=for-the-badge&logo=postgresql&logoColor=white)
+![Celery](https://img.shields.io/badge/Celery-37814A?style=for-the-badge&logo=celery&logoColor=white)
+![RabbitMQ](https://img.shields.io/badge/RabbitMQ-FF6600?style=for-the-badge&logo=rabbitmq&logoColor=white)
+![Sentry](https://img.shields.io/badge/Sentry-362D59?style=for-the-badge&logo=sentry&logoColor=white)
 
-   ### Prerequisites
-   - Specify any prerequisites (e.g., Python version, Docker, etc.)
-   - Install Python 3+. Installation link: <insert official python installation link>
-   - Install and setup RabbitMQ on machine. Installation link: <insert official rabbitmq installation link>
-   - Install and setup PgAdmin. Installation link: <insert official pgadmin installation link>
+---
 
-   ### Steps
-   1. Clone the repository:
-      ```bash
-      git clone <repository-url>
-      ```
-   2. Navigate to the project directory:
-      ```bash
-      cd "Mini Social Media API"
-      ```
-   3. Install dependencies:
-      ```bash
-      pip install -r requirements.txt
-      ```
-   4. Set up environment variables:
-      - Provide details on `.env` file or other configurations.
-      - Set the enviroment variables below
+## Features ✨
 
-      ENVIROMENT=development
+### RBAC (users, admin)
 
-      # Fastapi port
-      API_PORT=8000
+#### Users:
+- Create account and view profile with profile images
+- View feed posts from followers and non-followers
+- like and comment on a post
+- follow and unfollow other users
+- view followers and followings
 
-      # API DB 
-      API_DB=your_db_name
-      API_DB_USER=your_db_user
-      API_DB_PASSWORD=your_db_password
-      API_DB_PORT=your_api_db_port
+#### Admin:
+- Assign admin role
+- Suspend and unsuspend users
+- View and manage list of active users
+- View and manage list suspended users
 
-      # Test DB
-      Create a separate database to run tests
-      TEST_DB=your_db_name
-      TEST_DB_USER=your_db_user
-      TEST_DB_PASSWORD=your_db_password
-      TEST_DB_PORT=your_test_db_port
+---
 
-      # RabbitMQ 
-      BROKER_USER=your_broker_user
-      BROKER_PASSWORD=your_broker_password
-      BROKER_VHOST=your_broker_virtual_host
-      BROKER_PORT=broker_port
-      BROKER_PLUGIN_PORT=broker_plugin_port
+To run application locally
 
-      # Database urls
-      DATABASE_URL=postgresql+psycopg://{API_DB_USER}:{API_DB_PASSWORD}@localhost:5432/{API_DB}
-      WORKER_DATABASE_URL=postgresql+psycopg2://{API_DB_USER}:{API_DB_PASSWORD}@localhost:5432/{API_DB}
-      TEST_DATABASE_URL=postgresql+psycopg2://{TEST_DB_USER}:{TEST_DB_PASSWORD}@localhost:5432/{TEST_DB}
+### Prerequisites 📋
 
-      # RabbitMQ url
-      BROKER_URL=amqp://{BROKER_USER}:{BROKER_PASSWORD}@localhost:5672/{BROKER_VHOST}
+- Install Python 3.14. [Installation link](https://www.python.org/downloads/)
+- Install and set up RabbitMQ on your machine. [Installation link](https://www.rabbitmq.com/docs/download)
+- Install and set up PgAdmin. [Installation link](https://www.pgadmin.org/download/)
 
-      # Argon2
-      ARGON2_PEPPER=your_argon2_pepper
+---
 
-      # Authentication
-      JWT_ALGORITHM=jwt_algorithm
-      ACCESS_TOKEN_SECRET_KEY=your_access_token_secret_key
-      ACCESS_TOKEN_EXPIRE_TIME=your_access_token_expire_time
-      REFRESH_TOKEN_SECRET_KEY=your_refresh_token_secret_key
-      REFRESH_TOKEN_EXPIRE_TIME=your_refresh_token_expire_time
+### Steps 🛠️
 
-      # Admin
-      ADMIN_DISPLAY_NAME=your_admin_display_name
-      ADMIN_USERNAME=your_admin_username
-      ADMIN_EMAIL=your_admin_email
-      ADMIN_PASSWORD=your_admin_password
-      ADMIN_DOB=your_admin_dob
-      ADMIN_NATIONALITY=your_admin_nationality
-      ADMIN_BIO=your_admin_bio
+#### Clone the repository:
+```bash
+git clone `https://github.com/Samson23-ux/Social-Media-API`
+```
 
-      - Use set admin deatils to perform admin related actions
+#### Navigate to the project directory:
+```bash
+cd "Social-Media-API"
+```
 
-      # Image Uploads
-      PROFILE_IMAGE_PATH=profile_image_path 
-         - NB: use ./app/uploads/profile_images/
-      POST_IMAGE_PATH=post_image_path
-         - NB: use ./app/uploads/post_images/
+#### Create and activate virtual environment:
 
-      # Sentry DSN
-      SENTRY_SDK_DSN=your_sentry_dsn
-         - Get a sentry dsn at <Insert sentry link>
+**Create:**
+```bash
+python -m venv venv
+```
 
-   5. Run python script to initialize database with the set admin details
-      ```bash
-      python -m app.scripts.seed_data
-      ```
+**Activate:**
+- **Windows:**
+```bash
+venv\Scripts\activate
+```
+- **Linux/macOS:**
+```bash
+source venv/bin/activate
+```
 
-   6. Start celery worker
-      ```bash
-      Celery -A app.schedules.celery_app worker -l info -P gevent
-      ```
+#### Install dependencies:
+```bash
+pip install -r requirements.txt
+```
 
-   8. Start celery beat
-      ```bash
-      Celery -A app.schedules.celery_app beat -l info
-      ```
+#### Set up environment variables:
+- Set the environment variables in the `env-demo.txt` file ([link to file](./env-demo.txt))
 
-   9. Run the application:
-      ```bash
-      uvicorn app.main:app --reload
-      ```
+#### Create API database using PgAdmin.
 
-   10. Test API endpoints via docs
-      Open browser and navigate to http://localhost:8000/docs
+#### Run Python script to initialize the database with roles and set admin details:
+```bash
+python -m app.scripts.seed_data
+```
 
-2. Run application via docker
+#### Start Celery worker:
+```bash
+celery -A app.schedules.celery_app worker -l info -P gevent
+```
 
-   # Prerequisites
-   - Setup docker on machine. See <insert docker official download link>
+#### Start Celery beat:
+```bash
+celery -A app.schedules.celery_app beat -l info
+```
 
-   - Navigate to command line
-   - Run:
-      ```bash
-      docker compose up
-      ```
-   -  Open browser and navigate to http://localhost:8000/docs to test endpoints
+#### Run the application:
+```bash
+uvicorn app.main:app --reload
+```
 
-3. Test endpoints via live url
-   NB: Some services are hosted are on free tier and may not be available after a few days
-   - Live url: <Insert live url>
+#### Test API endpoints via docs:
+Open your browser and navigate to [http://localhost:8000/docs](http://localhost:8000/docs).
 
 ## Testing
 
 1. Run tests:
-   ```bash
-   pytest
-   ```
+```bash
+pytest
+```
 2. Run tests with coverage:
-   ```bash
-   pytest --cov=.
-   ```
+```bash
+pytest --cov=.
+```
 3. Run a particular test
-   ```bash
-   pytest tests/<preferred_test_folder>::<preferred_test_file.py>
-   ```
-
-## License
-
-Specify the license under which the project is distributed.
+```bash
+pytest tests/<preferred_test_file.py>::<preferred_test>
+```

@@ -814,8 +814,6 @@ class UserServiceV1:
                 'Internal server error while deleting user accounts permanently'
             )
             raise ServerError() from e
-        finally:
-            db.close()
 
     @staticmethod
     def delete_profile_image(

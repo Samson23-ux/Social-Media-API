@@ -79,7 +79,7 @@ def create_role(test_db_session):
 
     user_role_db: Role | None = user_repo_v1.get_role(user_role.name, db)
 
-    if not admin_role_db:
+    if not user_role_db:
         user_db: Role = Role(name=user_role.name)
         user_repo_v1.create_role(user_db, db)
 
