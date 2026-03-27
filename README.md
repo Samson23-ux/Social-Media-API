@@ -1,6 +1,4 @@
-# Project Title 🎓
-
-**Mini Social Media API**
+# Mini Social Media API
 
 ---
 
